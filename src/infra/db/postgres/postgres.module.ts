@@ -26,7 +26,7 @@ import { knex, Knex } from "knex";
                     },
                 });
 
-                await conn.raw("SELECT 'local'");
+                await conn.raw("SELECT 'something'");
 
                 Logger.log('db PG_CONNECTION connected successfully')
 

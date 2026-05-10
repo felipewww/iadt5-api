@@ -1,10 +1,12 @@
+import './infra/config'
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { InfraModule } from '@/infra/infra.module';
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [
+      InfraModule
+  ],
+  controllers: [],
+  providers: [],
 })
 export class AppModule {}
