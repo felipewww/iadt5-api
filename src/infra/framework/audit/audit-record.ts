@@ -3,7 +3,7 @@ export type AuditRecord = {
     project: string,
     client: string,
     traceId: string,
-    user_id: string,
+    user_id: number,
     user_name: string,
     uri: string,
     method: string,

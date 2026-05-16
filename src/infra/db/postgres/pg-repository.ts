@@ -1,3 +1,4 @@
+import { Inject } from '@nestjs/common';
 import { Knex } from "knex";
 
 export abstract class PgRepository {
@@ -5,8 +6,8 @@ export abstract class PgRepository {
     protected alias: string;
 
     constructor(
-        protected readonly connection: Knex,
-        protected readonly readerConnection: Knex
+        @Inject("PG_CONNECTION") protected readonly connection: Knex,
+        @Inject("PG_CONNECTION") protected readonly readerConnection: Knex,
     ) {
     }
 

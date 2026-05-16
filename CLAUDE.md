@@ -14,6 +14,49 @@ Cada módulo tem sua própria documentação em `api/docs/`:
 
 ---
 
+## HashId — Ofuscação de IDs
+
+IDs numéricos são mantidos no banco, mas convertidos para tokens curtos na borda da API (ex: `A1B2-C3D4-E5F6`) para esconder sequencialidade.
+
+**Funcionamento:**
+- **Encode (output):** `HashIdInterceptor` (global) percorre recursivamente o response e encoda todo campo `id` numérico antes da resposta sair.
+- **Decode (input):** `HashIdPipe` decodifica o token recebido no `@Param`. Usar no lugar do `ParseIntPipe`.
+
+```typescript
+// controller
+@Get(':id')
+findOne(@Param('id', HashIdPipe) id: number) {
+    return this.getHandler.execute(id); // id já é number
+}
+```
+
+**Variável de ambiente obrigatória:** `HASH_ID_KEY` — chave HMAC-SHA256. Mudar essa chave invalida todos os tokens existentes.
+
+**Limite:** ~2.1 bilhões de IDs únicos por entidade (36^6 = 2.176.782.336).
+
+**O que é codificado:** somente campos com nome exato `id`. Campos como `module_id`, `group_id` etc. NÃO são codificados automaticamente pelo interceptor.
+
+**Decodificando IDs em DTOs de entrada (body):** usar `@TransformId()` para campos singulares e `@TransformIds()` para arrays. O campo mantém o tipo `number`/`number[]` — o transform converte o token recebido antes da validação rodar.
+
+```typescript
+import { TransformId, TransformIds } from '@/infra/hash-id/transform-id.decorator';
+
+export class ExampleCommand {
+    @TransformId()  @IsInt()              resourceId: number;
+    @TransformIds() @IsArray() @IsInt({ each: true }) relatedIds: number[];
+}
+```
+
+**Regra geral:**
+| Origem do ID | Mecanismo |
+|---|---|
+| `@Param('id')` na URL | `HashIdPipe` no lugar do `ParseIntPipe` |
+| Campo singular no body | `@TransformId()` no DTO |
+| Array de IDs no body | `@TransformIds()` no DTO |
+| Response (qualquer campo `id`) | Automático via `HashIdInterceptor` |
+
+---
+
 ## Scripts (`package.json`)
 
 | Script | O que faz |
@@ -214,6 +257,16 @@ export class FooOutput {
 ### Migration
 
 **Criar:** `npm run mgt:make -- <nome>` (executar dentro de `api/`)
+
+**Atenção ao criar múltiplas migrations em sequência:** o Knex usa o timestamp do nome do arquivo como chave de ordenação. Quando a IA gera várias migrations rapidamente, todas saem com o mesmo timestamp e são ordenadas **alfabeticamente** — o que pode quebrar dependências entre tabelas (ex: `_permissions` antes de `_system_modules`).
+
+Ao criar um conjunto de migrations que têm dependências entre si, garanta timestamps distintos nos nomes dos arquivos. A forma mais simples é incrementar os últimos dígitos manualmente após gerar:
+
+```
+20260516123331_create-system-modules-table.ts   ← sem dependências, roda primeiro
+20260516123332_create-permissions-table.ts       ← depende de system-modules
+20260516123333_create-group-permissions-table.ts ← depende de ambas
+```
 
 Estrutura do arquivo gerado (em `src/infra/db/postgres/migrations/`):
 

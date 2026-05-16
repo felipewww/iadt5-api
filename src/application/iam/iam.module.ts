@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { IamUsersController } from '@/application/iam/controllers/iam-users.controller';
 import { IamGroupsController } from '@/application/iam/controllers/iam-groups.controller';
 import { IamPermissionsController } from '@/application/iam/controllers/iam-permissions.controller';
@@ -22,6 +22,7 @@ import { ListGroupsHandler } from '@/application/iam/domain/queries/groups/list-
 import { GetGroupHandler } from '@/application/iam/domain/queries/groups/get-group.handler';
 import { ListGroupPermissionsHandler } from '@/application/iam/domain/queries/groups/list-group-permissions.handler';
 import { ListPermissionsHandler } from '@/application/iam/domain/queries/permissions/list-permissions.handler';
+import { GroupPermissionsCache } from '@/infra/cache/group-permissions.cache';
 
 @Module({
     controllers: [IamUsersController, IamGroupsController, IamPermissionsController],
@@ -47,5 +48,25 @@ import { ListPermissionsHandler } from '@/application/iam/domain/queries/permiss
         ListGroupPermissionsHandler,
         ListPermissionsHandler,
     ],
+    exports: [IamUsersRepository],
 })
-export class IamModule {}
+export class IamModule implements OnModuleInit {
+    constructor(
+        private readonly groupsRepository: IamGroupsRepository,
+        private readonly groupPermissionsCache: GroupPermissionsCache,
+    ) {}
+
+    async onModuleInit(): Promise<void> {
+        const rows = await this.groupsRepository.findAllGroupPermissions();
+        const byGroup = new Map<number, string[]>();
+
+        for (const { group_id, module_id, action } of rows) {
+            if (!byGroup.has(group_id)) byGroup.set(group_id, []);
+            byGroup.get(group_id).push(`${module_id}:${action}`);
+        }
+
+        for (const [groupId, keys] of byGroup) {
+            this.groupPermissionsCache.set(groupId, keys);
+        }
+    }
+}

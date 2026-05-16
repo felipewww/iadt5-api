@@ -53,6 +53,10 @@ export class RequestContext {
     //     }
     // }
 
+    get user() {
+        return this.remoteUser;
+    }
+
     get audit() {
         return this.Audit;
     }

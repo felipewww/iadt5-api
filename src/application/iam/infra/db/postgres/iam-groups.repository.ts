@@ -66,6 +66,14 @@ export class IamGroupsRepository extends PgRepository {
             .select('p.*');
     }
 
+    async findAllGroupPermissions(): Promise<{ group_id: number; module_id: number; action: number }[]> {
+        return this.readerConnection
+            .queryBuilder()
+            .table('group_permissions as gp')
+            .join('_permissions as p', 'p.id', 'gp.permission_id')
+            .select('gp.group_id', 'p.module_id', 'p.action');
+    }
+
     async syncPermissions(groupId: number, permissionIds: number[], trx: Knex.Transaction): Promise<void> {
         await trx('group_permissions').where('group_id', groupId).delete();
 

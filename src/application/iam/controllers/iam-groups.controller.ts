@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Roles } from '@/infra/framework/permissions/roles.decorator';
 import { SysModules } from '@/domain/permissions/sys-modules';
@@ -14,6 +14,7 @@ import { SyncGroupPermissionsHandler } from '@/application/iam/domain/commands/g
 import { ListGroupsHandler } from '@/application/iam/domain/queries/groups/list-groups.handler';
 import { GetGroupHandler } from '@/application/iam/domain/queries/groups/get-group.handler';
 import { ListGroupPermissionsHandler } from '@/application/iam/domain/queries/groups/list-group-permissions.handler';
+import { HashIdPipe } from '@/infra/framework/http/hash-id.pipe';
 
 @ApiTags('IAM — Groups')
 @Controller('iam/groups')
@@ -36,19 +37,19 @@ export class IamGroupsController {
 
     @Put(':id')
     @Roles(SysModules.iam, [PermissionsContracts.update])
-    update(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateGroupCommand) {
+    update(@Param('id', HashIdPipe) id: number, @Body() body: UpdateGroupCommand) {
         return this.updateGroup.execute({ id, data: body });
     }
 
     @Delete(':id')
     @Roles(SysModules.iam, [PermissionsContracts.delete])
-    remove(@Param('id', ParseIntPipe) id: number) {
+    remove(@Param('id', HashIdPipe) id: number) {
         return this.deleteGroup.execute(id);
     }
 
     @Put(':id/permissions')
     @Roles(SysModules.iam, [PermissionsContracts.update])
-    syncPermissions(@Param('id', ParseIntPipe) id: number, @Body() body: SyncGroupPermissionsCommand) {
+    syncPermissions(@Param('id', HashIdPipe) id: number, @Body() body: SyncGroupPermissionsCommand) {
         return this.syncGroupPermissions.execute({ groupId: id, data: body });
     }
 
@@ -60,13 +61,13 @@ export class IamGroupsController {
 
     @Get(':id')
     @Roles(SysModules.iam, [PermissionsContracts.read])
-    findOne(@Param('id', ParseIntPipe) id: number) {
+    findOne(@Param('id', HashIdPipe) id: number) {
         return this.getGroup.execute(id);
     }
 
     @Get(':id/permissions')
     @Roles(SysModules.iam, [PermissionsContracts.read])
-    findPermissions(@Param('id', ParseIntPipe) id: number) {
+    findPermissions(@Param('id', HashIdPipe) id: number) {
         return this.listGroupPermissions.execute(id);
     }
 }

@@ -1,8 +1,7 @@
-export type RemoteUser<META extends Record<any, any>> = {
-    id: string;
+export type RemoteUser<META extends Record<any, any> = Record<string, any>> = {
+    id: number;
     username: string;
     name: string;
-    issuer: string;
-    permissionGroups: string[];
+    groups: number[];
     metadata: META;
 }

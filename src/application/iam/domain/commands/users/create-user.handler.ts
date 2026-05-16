@@ -1,4 +1,5 @@
 import { ConflictException } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { Handler } from '@/infra/framework/handler';
 import { CreateUserCommand } from '@/domain/dtos/iam/users/commands/create-user.command';
 import { UserOutput } from '@/domain/dtos/iam/users/outputs/user.output';
@@ -16,9 +17,11 @@ export class CreateUserHandler implements Handler<CreateUserCommand, UserOutput>
         if (existingUsername) throw new ConflictException('Username já está em uso');
         if (existingEmail) throw new ConflictException('E-mail já está em uso');
 
+        const password = await bcrypt.hash(input.password, 10);
+
         const user = await this.usersRepository.transaction((trx) =>
             this.usersRepository.create(
-                { name: input.name, username: input.username, email: input.email, password: input.password, active: true },
+                { name: input.name, username: input.username, email: input.email, password, active: true },
                 trx,
             ),
         );
