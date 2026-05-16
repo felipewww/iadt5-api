@@ -2,7 +2,7 @@ import { Knex } from 'knex';
 import { PgRepository } from '@/infra/db/postgres/pg-repository';
 import { ModelUser } from '@/application/iam/infra/db/postgres/models/model-user';
 import { ModelGroup } from '@/application/iam/infra/db/postgres/models/model-group';
-import { UserReadModel } from '@/application/iam/infra/db/postgres/models/user.read-model';
+import { UserReadModel } from '@/domain/read-models/iam/user.read-model';
 import { ListUsersQuery } from '@/domain/dtos/iam/users/queries/list-users.query';
 import { ModelCols } from '@/infra/db/model-cols';
 import { applyFilters } from '@/infra/db/utils/apply-filters';
@@ -18,7 +18,6 @@ export class IamUsersRepository extends PgRepository {
             name: 'u.name',
             username: 'u.username',
             email: 'u.email',
-            password: 'u.password',
             active: 'u.active',
             created_at: 'u.created_at',
             updated_at: 'u.updated_at',

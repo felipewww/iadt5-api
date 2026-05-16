@@ -101,7 +101,7 @@ export class ListFoosHandler implements Handler<ListFoosQuery, FooOutput[]> {
 
 **Regras do Handler:**
 - Sempre retorna um `Output`, nunca um `Model` ou `ReadModel`
-- Faz o mapeamento `ReadModel → Output` via `XOutput.from(model)`
+- Faz o mapeamento `ReadModel → Output` via `XOutput.from(readModel)`
 - Nunca usar `Omit<>`, `Pick<>` ou `Partial<>` em outputs
 
 DTOs de entrada de commands: `src/domain/dtos/<módulo>/commands/`
@@ -113,20 +113,21 @@ DTOs de saída: `src/domain/dtos/<módulo>/outputs/`
 ### Repository e ReadModel
 
 O repository tem dois tipos de retorno:
-- **`Model`** — espelho exato da tabela. Usado em mutations (insert/update) e lookups por ID.
-- **`ReadModel`** — resultado de queries com JOINs. Estende o Model com campos extras. Localizado em `infra/db/postgres/models/<nome>.read-model.ts`.
+- **`Model`** — espelho exato da tabela. Usado em mutations (insert/update) e lookups por ID. Localizado em `application/<módulo>/infra/db/postgres/models/`.
+- **`ReadModel`** — resultado de queries SELECT (com JOINs se necessário). **Independente do Model** — não estende nem importa o Model. Localizado em `domain/read-models/<módulo>/`.
 
 ```typescript
-// model-user.ts — espelho da tabela
-export type ModelUser = { id: number; name: string; email: string; ... }
+// application/<módulo>/infra/db/postgres/models/model-user.ts — espelho da tabela
+export type ModelUser = { id: number; name: string; email: string; password: string; ... }
 
-// user.read-model.ts — resultado da query (com JOINs futuros)
-export type UserReadModel = ModelUser & {
+// domain/read-models/<módulo>/user.read-model.ts — shape do resultado da query
+export type UserReadModel = {
+    id: number; name: string; email: string; active: boolean; ...
     // group_count?: number  ← campos de JOINs entram aqui
 }
 ```
 
-O método `getBy()` usa `ModelCols<ReadModel>` para tipar as colunas selecionadas e `applyFilters()` para aplicar filtros dinamicamente:
+O Repository usa `ModelCols<ReadModel>` para tipar as colunas selecionadas no `getBy()` e `applyFilters()` para aplicar filtros dinamicamente:
 
 ```typescript
 import { ModelCols } from '@/infra/db/model-cols';
@@ -185,15 +186,16 @@ Localização: `src/domain/dtos/<módulo>/outputs/<nome>.output.ts`
 
 ```typescript
 import { ApiProperty } from '@nestjs/swagger';
+import { FooReadModel } from '@/domain/read-models/foo/foo.read-model';
 
 export class FooOutput {
     @ApiProperty() id: number;
     @ApiProperty() name: string;
 
-    static from(model: { id: number; name: string }): FooOutput {
+    static from(this: void, readModel: FooReadModel): FooOutput {
         const output = new FooOutput();
-        output.id = model.id;
-        output.name = model.name;
+        output.id = readModel.id;
+        output.name = readModel.name;
         return output;
     }
 }
@@ -201,9 +203,11 @@ export class FooOutput {
 
 - Usar `class` com `@ApiProperty` para documentação Swagger automática
 - Nunca usar `Omit<>`, `Pick<>` ou `Partial<>` — declarar os campos explicitamente
+- Nunca usar tipos inline em `static from()` — sempre referenciar o `ReadModel` pelo nome
+- Sempre assinar `static from(this: void, ...)` — permite passar como callback (`.map(FooOutput.from)`) sem violar `@typescript-eslint/unbound-method`
 - Reutilizar o mesmo Output quando o shape for idêntico entre handlers
 - Se o List precisar de campos extras, criar um output específico (ex: `FooListItemOutput`)
-- O método `static from()` centraliza o mapeamento `Model → Output`
+- O método `static from(readModel: FooReadModel): FooOutput` centraliza o mapeamento `ReadModel → Output`
 
 ---
 

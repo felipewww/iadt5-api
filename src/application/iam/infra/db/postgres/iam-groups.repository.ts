@@ -1,8 +1,8 @@
 import { Knex } from 'knex';
 import { PgRepository } from '@/infra/db/postgres/pg-repository';
 import { ModelGroup } from '@/application/iam/infra/db/postgres/models/model-group';
-import { ModelPermission } from '@/application/iam/infra/db/postgres/models/model-permission';
-import { GroupReadModel } from '@/application/iam/infra/db/postgres/models/group.read-model';
+import { GroupReadModel } from '@/domain/read-models/iam/group.read-model';
+import { PermissionReadModel } from '@/domain/read-models/iam/system-module.read-model';
 import { ListGroupsQuery } from '@/domain/dtos/iam/groups/queries/list-groups.query';
 import { ModelCols } from '@/infra/db/model-cols';
 import { applyFilters } from '@/infra/db/utils/apply-filters';
@@ -57,7 +57,7 @@ export class IamGroupsRepository extends PgRepository {
         await this.writer(trx).where('id', id).delete();
     }
 
-    async findPermissions(groupId: number): Promise<ModelPermission[]> {
+    async findPermissions(groupId: number): Promise<PermissionReadModel[]> {
         return this.readerConnection
             .queryBuilder()
             .table('_permissions as p')

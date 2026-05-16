@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { UserReadModel } from '@/domain/read-models/iam/user.read-model';
 
 export class UserOutput {
     @ApiProperty() id: number;
@@ -9,15 +10,15 @@ export class UserOutput {
     @ApiProperty() created_at: Date;
     @ApiProperty() updated_at: Date;
 
-    static from(model: { id: number; name: string; username: string; email: string; active: boolean; created_at: Date; updated_at: Date }): UserOutput {
+    static from(this: void, readModel: UserReadModel): UserOutput {
         const output = new UserOutput();
-        output.id = model.id;
-        output.name = model.name;
-        output.username = model.username;
-        output.email = model.email;
-        output.active = model.active;
-        output.created_at = model.created_at;
-        output.updated_at = model.updated_at;
+        output.id = readModel.id;
+        output.name = readModel.name;
+        output.username = readModel.username;
+        output.email = readModel.email;
+        output.active = readModel.active;
+        output.created_at = readModel.created_at;
+        output.updated_at = readModel.updated_at;
         return output;
     }
 }

@@ -1,11 +1,11 @@
 import { PgRepository } from '@/infra/db/postgres/pg-repository';
-import { ModelSystemModule } from '@/application/iam/infra/db/postgres/models/model-system-module';
+import { SystemModuleReadModel } from '@/domain/read-models/iam/system-module.read-model';
 
 export class IamPermissionsRepository extends PgRepository {
     tableName = '_permissions';
     protected alias = 'p';
 
-    async findAllGroupedByModule(): Promise<ModelSystemModule[]> {
+    async findAllGroupedByModule(): Promise<SystemModuleReadModel[]> {
         const rows = await this.readerConnection
             .queryBuilder()
             .table('_system_modules as sm')
@@ -16,8 +16,8 @@ export class IamPermissionsRepository extends PgRepository {
         return this.groupByModule(rows);
     }
 
-    private groupByModule(rows: any[]): ModelSystemModule[] {
-        const map = new Map<number, ModelSystemModule>();
+    private groupByModule(rows: any[]): SystemModuleReadModel[] {
+        const map = new Map<number, SystemModuleReadModel>();
 
         for (const row of rows) {
             if (!map.has(row.module_id)) {

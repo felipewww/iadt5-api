@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { GroupReadModel } from '@/domain/read-models/iam/group.read-model';
 
 export class GroupOutput {
     @ApiProperty() id: number;
@@ -7,13 +8,13 @@ export class GroupOutput {
     @ApiProperty() created_at: Date;
     @ApiProperty() updated_at: Date;
 
-    static from(model: { id: number; name: string; description: string | null; created_at: Date; updated_at: Date }): GroupOutput {
+    static from(this: void, readModel: GroupReadModel): GroupOutput {
         const output = new GroupOutput();
-        output.id = model.id;
-        output.name = model.name;
-        output.description = model.description;
-        output.created_at = model.created_at;
-        output.updated_at = model.updated_at;
+        output.id = readModel.id;
+        output.name = readModel.name;
+        output.description = readModel.description;
+        output.created_at = readModel.created_at;
+        output.updated_at = readModel.updated_at;
         return output;
     }
 }

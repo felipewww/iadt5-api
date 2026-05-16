@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PermissionOutput } from '@/domain/dtos/iam/permissions/outputs/permission.output';
+import { SystemModuleReadModel } from '@/domain/read-models/iam/system-module.read-model';
 
 export class SystemModuleOutput {
     @ApiProperty() id: number;
@@ -7,12 +8,12 @@ export class SystemModuleOutput {
     @ApiPropertyOptional({ nullable: true }) description: string | null;
     @ApiProperty({ type: [PermissionOutput] }) permissions: PermissionOutput[];
 
-    static from(model: { id: number; name: string; description: string | null; permissions: { id: number; module_id: number; action: number; name: string }[] }): SystemModuleOutput {
+    static from(this: void, readModel: SystemModuleReadModel): SystemModuleOutput {
         const output = new SystemModuleOutput();
-        output.id = model.id;
-        output.name = model.name;
-        output.description = model.description;
-        output.permissions = model.permissions.map(PermissionOutput.from);
+        output.id = readModel.id;
+        output.name = readModel.name;
+        output.description = readModel.description;
+        output.permissions = readModel.permissions.map(PermissionOutput.from);
         return output;
     }
 }

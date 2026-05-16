@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { PermissionReadModel } from '@/domain/read-models/iam/system-module.read-model';
 
 export class PermissionOutput {
     @ApiProperty() id: number;
@@ -6,12 +7,12 @@ export class PermissionOutput {
     @ApiProperty() action: number;
     @ApiProperty() name: string;
 
-    static from(model: { id: number; module_id: number; action: number; name: string }): PermissionOutput {
+    static from(this: void, readModel: PermissionReadModel): PermissionOutput {
         const output = new PermissionOutput();
-        output.id = model.id;
-        output.module_id = model.module_id;
-        output.action = model.action;
-        output.name = model.name;
+        output.id = readModel.id;
+        output.module_id = readModel.module_id;
+        output.action = readModel.action;
+        output.name = readModel.name;
         return output;
     }
 }
