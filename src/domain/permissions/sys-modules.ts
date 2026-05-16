@@ -1,3 +1,4 @@
 export enum SysModules {
-    contracts = 6
+    iam = 1,
+    contracts = 6,
 }
