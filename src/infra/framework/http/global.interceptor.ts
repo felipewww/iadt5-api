@@ -1,13 +1,5 @@
-import {
-    CallHandler,
-    ExecutionContext,
-    HttpException,
-    Injectable,
-    InternalServerErrorException,
-    Logger,
-    NestInterceptor,
-} from '@nestjs/common';
-import { catchError, finalize, map, throwError } from 'rxjs';
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { map } from 'rxjs';
 import { Reflector } from '@nestjs/core';
 import { AUDIT_PARAMS_KEY } from '@/infra/framework/audit/auditable';
 import { getRequestAdapter } from '@/infra/framework/http/get-request.adapter';
@@ -46,6 +38,7 @@ export class GlobalInterceptor implements NestInterceptor {
     intercept(context: ExecutionContext, next: CallHandler) {
         const request = getRequestAdapter(context)
         const now = Date.now();
+        request['_start'] = now;
         const method = request.method;
         const url = request.originalUrl ?? request.url;
 
@@ -67,51 +60,7 @@ export class GlobalInterceptor implements NestInterceptor {
                     // this.sqsAudit.publish(request.context.audit.records);
                 }
 
-                return {
-                    data: value,
-                };
-            }),
-            catchError((err) => {
-                Logger.error(err)
-
-                if (err instanceof HttpException) {
-                    const response = err.getResponse() as string | { message?: string | string[] };
-                    let errors: string[] = [];
-
-                    if (typeof response === 'string') {
-                        errors = [response];
-                    } else if (Array.isArray(response?.message)) {
-                        errors = response.message.map((message) => String(message));
-                    } else if (typeof response?.message === 'string') {
-                        errors = [response.message];
-                    } else if (err.message) {
-                        errors = [err.message];
-                    }
-
-                    return throwError(() => {
-                        return new HttpException(
-                            {
-                                ok: false,
-                                duration: Date.now() - now,
-                                error: err.message,
-                                errors,
-                            },
-                            err.getStatus(),
-                        );
-                    });
-                }
-
-                // default = 500
-                return throwError(() => {
-                    return new InternalServerErrorException({
-                        ok: false,
-                        duration: Date.now() - now,
-                        error: 'Internal Server Error.',
-                    });
-                });
-            }),
-            finalize(() => {
-                // Logger.log(`${method} ${url} - ${Date.now() - now}ms`, GlobalInterceptor.name);
+                return { data: value };
             }),
         );
     }

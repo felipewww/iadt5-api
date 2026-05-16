@@ -4,7 +4,7 @@ import { Public } from '@/infra/framework/auth/public.decorator';
 import { LoginCommand } from '@/domain/dtos/auth/commands/login.command';
 import { LoginHandler } from '@/application/auth/domain/commands/login.handler';
 
-@ApiTags('auth')
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
     constructor(private readonly loginHandler: LoginHandler) {}

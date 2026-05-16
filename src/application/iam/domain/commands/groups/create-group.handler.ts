@@ -1,8 +1,10 @@
+import { Injectable } from '@nestjs/common';
 import { Handler } from '@/infra/framework/handler';
 import { CreateGroupCommand } from '@/domain/dtos/iam/groups/commands/create-group.command';
 import { GroupOutput } from '@/domain/dtos/iam/groups/outputs/group.output';
 import { IamGroupsRepository } from '@/application/iam/infra/db/postgres/iam-groups.repository';
 
+@Injectable()
 export class CreateGroupHandler implements Handler<CreateGroupCommand, GroupOutput> {
     constructor(private readonly groupsRepository: IamGroupsRepository) {}
 

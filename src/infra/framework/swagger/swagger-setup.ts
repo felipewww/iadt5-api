@@ -1,19 +1,20 @@
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import { INestApplication } from '@nestjs/common';
+import { manifest } from '@/infra/manifest/manifest';
 
 export function SwaggerSetup(app: INestApplication) {
     const config = new DocumentBuilder()
-        .setTitle('MUSA Admin API.')
-        .setDescription('API documentation for MUSA Admin')
-        .setVersion('1.0')
+        .setTitle(`${manifest.tenantName} — ${manifest.projectName}`)
+        .setDescription('API documentation')
+        .setVersion(manifest.version)
         .addBearerAuth(
             {
                 type: 'http',
                 scheme: 'bearer',
                 bearerFormat: 'JWT',
                 name: 'Authorization',
-                description: 'Enter JWT token',
+                description: 'JWT token obtido via POST /auth/login',
                 in: 'header',
             },
             'access-token',
@@ -22,26 +23,21 @@ export function SwaggerSetup(app: INestApplication) {
 
     const document = SwaggerModule.createDocument(app, config);
 
-
     (document as any)['x-tagGroups'] = [
-        { name: 'OPS',        tags: ['Coletas', 'Rotas', 'Documentos'] },
-        { name: 'Agreements', tags: ['Ordens', 'Contratos', 'Serviços - Transporte', 'Serviços - Recepção'] },
-        { name: 'Registry',   tags: ['Materiais', 'Embalagens', 'Tratamentos'] },
-        { name: 'Engine',     tags: ['Coletas (Engine)'] },
+        { name: 'Auth', tags: ['Auth'] },
+        { name: 'IAM',  tags: ['IAM — Users', 'IAM — Groups', 'IAM — Permissions'] },
     ];
 
     SwaggerModule.setup('api/docs', app, document);
 
     app.use('/api/reference', apiReference({
         content: document,
-        theme: 'default',
-        darkMode: false,
+        theme: 'moon',
+        darkMode: true,
         layout: 'modern',
         hideModels: false,
         customCss: `
-      :root { --scalar-font: 'Inter', system-ui, sans-serif; }
-      .sidebar { background: #f8f9fa; }
-    `,
+            :root { --scalar-font: 'Inter', system-ui, sans-serif; }
+        `,
     }));
-
 }

@@ -1,7 +1,9 @@
+import { Injectable } from '@nestjs/common';
 import { Handler } from '@/infra/framework/handler';
 import { SystemModuleOutput } from '@/domain/dtos/iam/permissions/outputs/system-module.output';
 import { IamPermissionsRepository } from '@/application/iam/infra/db/postgres/iam-permissions.repository';
 
+@Injectable()
 export class ListPermissionsHandler implements Handler<void, SystemModuleOutput[]> {
     constructor(private readonly permissionsRepository: IamPermissionsRepository) {}
 

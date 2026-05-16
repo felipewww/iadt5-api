@@ -2,6 +2,7 @@ import {NestFactory} from '@nestjs/core';
 import {AppModule} from './app.module';
 import {Logger, ValidationPipe} from "@nestjs/common";
 import { SwaggerSetup } from '@/infra/framework/swagger/swagger-setup';
+import * as bcrypt from 'bcryptjs';
 
 async function bootstrap() {
     const app = await NestFactory.create(AppModule);
@@ -25,4 +26,6 @@ async function bootstrap() {
 void bootstrap()
     .then(() => {
         Logger.log(`Server is running on port ${process.env.APP_PORT}`)
+        // bcrypt.hash('123123', 10)
+        //     .then(console.log)
     });

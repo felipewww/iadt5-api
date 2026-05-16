@@ -1,10 +1,11 @@
 import { Global, Module } from '@nestjs/common';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AwsModule } from '@/infra/aws/aws.module';
 import { PostgresModule } from '@/infra/db/postgres/postgres.module';
 import { RabbitConnectorModule } from '@/infra/rabbitmq/rabbit-connector.module';
 import { GlobalInterceptor } from '@/infra/framework/http/global.interceptor';
 import { HashIdInterceptor } from '@/infra/framework/http/hash-id.interceptor';
+import { HttpExceptionFilter } from '@/infra/framework/http/http-exception.filter';
 import { HashIdPipe } from '@/infra/framework/http/hash-id.pipe';
 import { HashIdService } from '@/infra/hash-id/hash-id.service';
 import { JwtAuthGuard } from '@/infra/framework/auth/jwt-auth.guard';
@@ -16,10 +17,11 @@ import { ProducerRegistry } from '@/infra/rabbitmq/producer-registry.service';
 @Module({
     imports: [PostgresModule, AwsModule, RabbitConnectorModule],
     providers: [
+        { provide: APP_FILTER,      useClass: HttpExceptionFilter },
         { provide: APP_INTERCEPTOR, useClass: GlobalInterceptor },
         { provide: APP_INTERCEPTOR, useClass: HashIdInterceptor },
-        { provide: APP_GUARD, useClass: JwtAuthGuard },
-        { provide: APP_GUARD, useClass: RolesGuard },
+        { provide: APP_GUARD,       useClass: JwtAuthGuard },
+        { provide: APP_GUARD,       useClass: RolesGuard },
         HashIdService,
         HashIdPipe,
         GroupPermissionsCache,

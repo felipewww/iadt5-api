@@ -32,6 +32,7 @@ export class JwtAuthGuard implements CanActivate {
                     username: payload['username'] as string,
                     name: payload['name'] as string,
                     groups: payload['groups'] as number[],
+                    root: (payload['root'] as boolean) ?? false,
                     metadata: {},
                 },
                 req.headers['x-trace-id'] as string,

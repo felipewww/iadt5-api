@@ -1,7 +1,8 @@
-import { NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Handler } from '@/infra/framework/handler';
 import { IamUsersRepository } from '@/application/iam/infra/db/postgres/iam-users.repository';
 
+@Injectable()
 export class DeleteUserHandler implements Handler<number, void> {
     constructor(private readonly usersRepository: IamUsersRepository) {}
 

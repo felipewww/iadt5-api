@@ -5,6 +5,7 @@ export type ModelUser = {
     email: string;
     password: string;
     active: boolean;
+    root: boolean;
     created_at: Date;
     updated_at: Date;
 }

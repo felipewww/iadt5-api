@@ -21,6 +21,8 @@ export class RolesGuard implements CanActivate {
         if (!metadata) return true;
 
         const req = getRequestAdapter(context);
+        if (req.context.user.root) return true;
+
         const [moduleId, permissionsRequired] = metadata;
         const { groups } = req.context.user;
 

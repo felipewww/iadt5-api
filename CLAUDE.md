@@ -110,10 +110,12 @@ Handlers são separados em duas pastas conforme o verbo HTTP:
 
 **Command handler** (`src/application/<módulo>/domain/commands/<sub>/<nome>.handler.ts`):
 ```typescript
+import { Injectable } from '@nestjs/common';
 import { Handler } from '@/infra/framework/handler';
 import { CreateFooCommand } from '@/domain/dtos/foo/commands/create-foo.command';
 import { FooOutput } from '@/domain/dtos/foo/outputs/foo.output';
 
+@Injectable()
 export class CreateFooHandler implements Handler<CreateFooCommand, FooOutput> {
     constructor(private readonly fooRepository: FooRepository) {}
 
@@ -128,10 +130,12 @@ export class CreateFooHandler implements Handler<CreateFooCommand, FooOutput> {
 
 **Query handler** (`src/application/<módulo>/domain/queries/<sub>/<nome>.handler.ts`):
 ```typescript
+import { Injectable } from '@nestjs/common';
 import { Handler } from '@/infra/framework/handler';
 import { ListFoosQuery } from '@/domain/dtos/foo/queries/list-foos.query';
 import { FooOutput } from '@/domain/dtos/foo/outputs/foo.output';
 
+@Injectable()
 export class ListFoosHandler implements Handler<ListFoosQuery, FooOutput[]> {
     constructor(private readonly fooRepository: FooRepository) {}
 
@@ -143,6 +147,7 @@ export class ListFoosHandler implements Handler<ListFoosQuery, FooOutput[]> {
 ```
 
 **Regras do Handler:**
+- Sempre decorar com `@Injectable()` — sem ele o NestJS não emite metadados do construtor e injeta `undefined` nas dependências
 - Sempre retorna um `Output`, nunca um `Model` ou `ReadModel`
 - Faz o mapeamento `ReadModel → Output` via `XOutput.from(readModel)`
 - Nunca usar `Omit<>`, `Pick<>` ou `Partial<>` em outputs

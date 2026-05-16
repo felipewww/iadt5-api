@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Handler } from '@/infra/framework/handler';
 import { SyncGroupPermissionsCommand } from '@/domain/dtos/iam/groups/commands/sync-group-permissions.command';
 import { IamGroupsRepository } from '@/application/iam/infra/db/postgres/iam-groups.repository';
@@ -9,6 +9,7 @@ import { manifest } from '@/infra/manifest/manifest';
 
 type Input = { groupId: number; data: SyncGroupPermissionsCommand };
 
+@Injectable()
 export class SyncGroupPermissionsHandler implements Handler<Input, void> {
     constructor(
         private readonly groupsRepository: IamGroupsRepository,

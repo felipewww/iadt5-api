@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '@/infra/framework/permissions/roles.decorator';
 import { SysModules } from '@/domain/permissions/sys-modules';
 import { PermissionsContracts } from '@/infra/framework/permissions/permissions.contracts';
@@ -17,6 +17,7 @@ import { ListGroupPermissionsHandler } from '@/application/iam/domain/queries/gr
 import { HashIdPipe } from '@/infra/framework/http/hash-id.pipe';
 
 @ApiTags('IAM — Groups')
+@ApiBearerAuth('access-token')
 @Controller('iam/groups')
 export class IamGroupsController {
     constructor(

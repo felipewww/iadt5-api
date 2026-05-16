@@ -1,8 +1,9 @@
-import { NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Handler } from '@/infra/framework/handler';
 import { GroupOutput } from '@/domain/dtos/iam/groups/outputs/group.output';
 import { IamGroupsRepository } from '@/application/iam/infra/db/postgres/iam-groups.repository';
 
+@Injectable()
 export class GetGroupHandler implements Handler<number, GroupOutput> {
     constructor(private readonly groupsRepository: IamGroupsRepository) {}
 

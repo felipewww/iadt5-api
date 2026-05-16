@@ -1,10 +1,11 @@
-import { ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { Handler } from '@/infra/framework/handler';
 import { CreateUserCommand } from '@/domain/dtos/iam/users/commands/create-user.command';
 import { UserOutput } from '@/domain/dtos/iam/users/outputs/user.output';
 import { IamUsersRepository } from '@/application/iam/infra/db/postgres/iam-users.repository';
 
+@Injectable()
 export class CreateUserHandler implements Handler<CreateUserCommand, UserOutput> {
     constructor(private readonly usersRepository: IamUsersRepository) {}
 
@@ -21,7 +22,7 @@ export class CreateUserHandler implements Handler<CreateUserCommand, UserOutput>
 
         const user = await this.usersRepository.transaction((trx) =>
             this.usersRepository.create(
-                { name: input.name, username: input.username, email: input.email, password, active: true },
+                { name: input.name, username: input.username, email: input.email, password, active: true, root: false },
                 trx,
             ),
         );

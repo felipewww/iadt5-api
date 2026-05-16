@@ -1,10 +1,11 @@
-import { NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Handler } from '@/infra/framework/handler';
 import { SyncUserGroupsCommand } from '@/domain/dtos/iam/users/commands/sync-user-groups.command';
 import { IamUsersRepository } from '@/application/iam/infra/db/postgres/iam-users.repository';
 
 type Input = { userId: number; data: SyncUserGroupsCommand };
 
+@Injectable()
 export class SyncUserGroupsHandler implements Handler<Input, void> {
     constructor(private readonly usersRepository: IamUsersRepository) {}
 

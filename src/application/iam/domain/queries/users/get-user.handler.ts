@@ -1,8 +1,9 @@
-import { NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Handler } from '@/infra/framework/handler';
 import { UserOutput } from '@/domain/dtos/iam/users/outputs/user.output';
 import { IamUsersRepository } from '@/application/iam/infra/db/postgres/iam-users.repository';
 
+@Injectable()
 export class GetUserHandler implements Handler<number, UserOutput> {
     constructor(private readonly usersRepository: IamUsersRepository) {}
 

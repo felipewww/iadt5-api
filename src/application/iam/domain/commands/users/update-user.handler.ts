@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { Handler } from '@/infra/framework/handler';
 import { UpdateUserCommand } from '@/domain/dtos/iam/users/commands/update-user.command';
 import { UserOutput } from '@/domain/dtos/iam/users/outputs/user.output';
@@ -6,6 +6,7 @@ import { IamUsersRepository } from '@/application/iam/infra/db/postgres/iam-user
 
 type Input = { id: number; data: UpdateUserCommand };
 
+@Injectable()
 export class UpdateUserHandler implements Handler<Input, UserOutput> {
     constructor(private readonly usersRepository: IamUsersRepository) {}
 
