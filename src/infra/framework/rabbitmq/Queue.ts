@@ -2,9 +2,11 @@ import {Connection} from "./Connection";
 import {Consumer} from "./Consumer";
 import {Exchange} from "./Exchange";
 import {DEAD_LETTER_EXC_NAME} from "./module";
+import { manifest } from '@/infra/manifest/manifest';
 
 export class Queue {
 
+    protected Name: string;
     public routingkey = '';
     private _consumers: Array<Consumer<any>> = []
 
@@ -19,9 +21,11 @@ export class Queue {
     protected type: 'round-robin'|'propagation' = 'round-robin'
 
     constructor(
-        protected Name: string,
+        name: string,
         protected Exchange: Exchange
     ) {
+        this.Name = name ? `${manifest.uid}_${name}` : null;
+
         if (!this.Exchange) {
             console.log(`Exchange for ${this.constructor.name} does not exist`);
             console.log(typeof this);
@@ -104,7 +108,7 @@ export class EventQueue extends Queue {
         serverId: string,
     ) {
         const queueClassName = this.constructor.name.toLowerCase().replace('queue', '');
-        this.Name = `evt-${queueClassName}-${serviceName}-${serverId}`;
+        this.Name = `${manifest.uid}_evt-${queueClassName}-${serviceName}-${serverId}`;
 
         return this;
     }

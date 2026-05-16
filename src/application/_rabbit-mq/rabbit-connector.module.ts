@@ -2,29 +2,30 @@ import { Inject, Injectable, Logger, Module } from '@nestjs/common';
 import * as RabbitMQ from 'src/infra/framework/rabbitmq/module';
 import { Exchanges } from 'src/application/_rabbit-mq/exchanges';
 import { Queues } from 'src/application/_rabbit-mq/queues';
-import { TenantSecretChangeMessage } from 'src/application/_rabbit-mq/messages/tenant-secret-change.message';
-import { TenantSecretConsumer } from 'src/application/_rabbit-mq/consumers/tenant-secret.consumer';
+import { SampleMessage } from '@/application/_rabbit-mq/messages/sample.message';
+import { SampleConsumer } from '@/application/_rabbit-mq/consumers/sample.consumer';
 
 export interface Producers {
-    TENANT_SECRET_CHANGE?: RabbitMQ.Producer<TenantSecretChangeMessage>;
+    PRODUCER_SAMPLE?: RabbitMQ.Producer<SampleMessage>;
 }
 
 @Module({})
 export class RabbitConnectorModule {
     public producers: Producers = {};
+    private connectionString: string;
 
     async onModuleInit() {
         const user = process.env.RMQ_USER;
         const pass = process.env.RMQ_PASS;
         const host = process.env.RMQ_HOST;
-        const connectionString = `amqp://${user}:${pass}@${host}`;
+        this.connectionString = `amqp://${user}:${pass}@${host}`;
 
         try {
-            await this.initConsumers(connectionString).then(() => {
+            await this.initConsumers().then(() => {
                 Logger.log(`rabbitmq consumers connected`);
             });
 
-            await this.initProducers(connectionString).then(() => {
+            await this.initProducers().then(() => {
                 Logger.log(`rabbitmq producers connected`);
             });
         } catch (e) {
@@ -33,32 +34,27 @@ export class RabbitConnectorModule {
         }
     }
 
-    async initConsumers(connectionString: string): Promise<void> {
+    async initConsumers(): Promise<void> {
         const consumersConn = new RabbitMQ.Connection(
             'consumers_conn',
-            connectionString,
+            this.connectionString,
         );
 
         await consumersConn.init(
-            [
-                Exchanges.TENANT_SECRET
-            ],
-            [
-                new TenantSecretConsumer(Queues.TENANT_SECRET)
-            ],
+            [Exchanges.EXC_SAMPLE],
+            [new SampleConsumer(Queues.QUEUE_SAMPLE)],
         );
     }
 
-    async initProducers(connectionString: string) {
+    async initProducers() {
         const producersConn = await new RabbitMQ.Connection(
             'producers_conn',
-            connectionString,
+            this.connectionString,
         ).init();
 
-        this.producers.TENANT_SECRET_CHANGE =
-            new RabbitMQ.Producer<TenantSecretChangeMessage>(
-                Exchanges.TENANT_SECRET,
-                producersConn,
-            );
+        this.producers.PRODUCER_SAMPLE = new RabbitMQ.Producer<SampleMessage>(
+            Exchanges.EXC_SAMPLE,
+            producersConn,
+        );
     }
 }

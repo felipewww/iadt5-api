@@ -30,14 +30,14 @@ export class Connection {
 
             })
             // .on('')
-        
+
         await this.Channel.prefetch(1)
 
-        for (let exc of exchanges) {
+        for (const exc of exchanges) {
             await exc.init(this)
         }
 
-        for (let consumer of consumers) {
+        for (const consumer of consumers) {
             await consumer.init(this);
         }
 

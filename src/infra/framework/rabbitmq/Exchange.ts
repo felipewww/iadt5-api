@@ -1,8 +1,10 @@
 import {Connection} from "./Connection";
 import {Queue} from "./Queue";
+import { manifest } from '@/infra/manifest/manifest';
 
 export class Exchange {
 
+    public name: string;
     protected _queues: Array<Queue> = [];
 
     get queues() {
@@ -10,9 +12,10 @@ export class Exchange {
     }
 
     constructor(
-        public name: string,
+        name: string,
         public type: 'direct' | 'topic' | 'headers' | 'fanout' | 'match' = 'fanout'
     ) {
+        this.name = `${manifest.uid}_${name}`;
     }
 
     public async init(RabbitConn: Connection){
@@ -24,7 +27,7 @@ export class Exchange {
             }
         )
 
-        for (let queue of this._queues) {
+        for (const queue of this._queues) {
             await queue.init(RabbitConn)
             await RabbitConn.channel.bindQueue(queue.name, this.name, queue.routingkey);
         }

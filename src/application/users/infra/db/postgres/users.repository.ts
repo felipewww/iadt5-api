@@ -5,6 +5,5 @@ export class UsersRepository extends PgRepository {
 
     async findByUsername(username: string) {
 
-
     }
 }
