@@ -1,13 +1,14 @@
 import { Inject, Logger, Module } from '@nestjs/common';
+import { name as serviceName } from '../../../package.json';
 import * as RabbitMQ from 'src/infra/framework/rabbitmq/module';
-import { Exchanges } from 'src/application/_rabbit-mq/exchanges';
-import { Queues } from 'src/application/_rabbit-mq/queues';
-import { SampleMessage } from '@/application/_rabbit-mq/messages/sample.message';
-import { SampleConsumer } from '@/application/_rabbit-mq/consumers/sample.consumer';
-import { GroupPermissionsUpdatedConsumer } from '@/application/_rabbit-mq/consumers/group-permissions-updated.consumer';
+import { Exchanges } from '@/infra/rabbitmq/exchanges';
+import { Queues } from '@/infra/rabbitmq/queues';
+import { SampleMessage } from '@/infra/rabbitmq/messages/sample.message';
+import { SampleConsumer } from '@/infra/rabbitmq/consumers/sample.consumer';
+import { GroupPermissionsUpdatedConsumer } from '@/application/iam/consumers/group-permissions-updated.consumer';
 import { GroupPermissionsCache } from '@/infra/cache/group-permissions.cache';
 import { ProducerRegistry } from '@/infra/rabbitmq/producer-registry.service';
-import { GroupPermissionsUpdatedMessage } from '@/application/_rabbit-mq/messages/group-permissions-updated.message';
+import { GroupPermissionsUpdatedMessage } from '@/infra/rabbitmq/messages/group-permissions-updated.message';
 
 export interface Producers {
     PRODUCER_SAMPLE?: RabbitMQ.Producer<SampleMessage>;
@@ -46,10 +47,10 @@ export class RabbitConnectorModule {
     async initConsumers(): Promise<void> {
         const consumersConn = new RabbitMQ.Connection('consumers_conn', this.connectionString);
 
-        Queues.EVT_GROUP_PERMISSIONS_UPDATED.mount('api', crypto.randomUUID());
+        Queues.EVT_GROUP_PERMISSIONS_UPDATED.mount(serviceName, 'group-permissions');
 
         await consumersConn.init(
-            [Exchanges.EXC_SAMPLE, Exchanges.EXC_IAM],
+            [Exchanges.EXC_SAMPLE, Exchanges.EXC_IAM_GROUP_PERMISSIONS],
             [
                 new SampleConsumer(Queues.QUEUE_SAMPLE),
                 new GroupPermissionsUpdatedConsumer(Queues.EVT_GROUP_PERMISSIONS_UPDATED, this.groupPermissionsCache),
@@ -62,7 +63,7 @@ export class RabbitConnectorModule {
 
         this.producers.PRODUCER_SAMPLE = new RabbitMQ.Producer<SampleMessage>(Exchanges.EXC_SAMPLE, producersConn);
 
-        const iamProducer = new RabbitMQ.Producer<GroupPermissionsUpdatedMessage>(Exchanges.EXC_IAM, producersConn);
+        const iamProducer = new RabbitMQ.Producer<GroupPermissionsUpdatedMessage>(Exchanges.EXC_IAM_GROUP_PERMISSIONS, producersConn);
         this.producerRegistry.register('PRODUCER_IAM', iamProducer);
     }
 }

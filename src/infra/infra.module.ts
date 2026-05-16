@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AwsModule } from '@/infra/aws/aws.module';
 import { PostgresModule } from '@/infra/db/postgres/postgres.module';
+import { RabbitConnectorModule } from '@/infra/rabbitmq/rabbit-connector.module';
 import { GlobalInterceptor } from '@/infra/framework/http/global.interceptor';
 import { HashIdInterceptor } from '@/infra/framework/http/hash-id.interceptor';
 import { HashIdPipe } from '@/infra/framework/http/hash-id.pipe';
@@ -13,7 +14,7 @@ import { ProducerRegistry } from '@/infra/rabbitmq/producer-registry.service';
 
 @Global()
 @Module({
-    imports: [PostgresModule, AwsModule],
+    imports: [PostgresModule, AwsModule, RabbitConnectorModule],
     providers: [
         { provide: APP_INTERCEPTOR, useClass: GlobalInterceptor },
         { provide: APP_INTERCEPTOR, useClass: HashIdInterceptor },

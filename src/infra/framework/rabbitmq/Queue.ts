@@ -103,12 +103,9 @@ export class EventQueue extends Queue {
         super(null, Exchange);
     }
 
-    mount(
-        serviceName: string,
-        serverId: string,
-    ) {
-        const queueClassName = this.constructor.name.toLowerCase().replace('queue', '');
-        this.Name = `${manifest.uid}_evt-${queueClassName}-${serviceName}-${serverId}`;
+    mount(serviceName: string, eventName?: string) {
+        const name = eventName ?? this.constructor.name.toLowerCase().replace('queue', '');
+        this.Name = `${manifest.uid}_evt-${name}-${serviceName}`;
 
         return this;
     }

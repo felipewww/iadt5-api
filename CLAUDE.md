@@ -353,9 +353,13 @@ Registrar o novo módulo em `src/application/application.module.ts`.
 
 | Artefato | Localização |
 |---|---|
-| Exchanges | `src/application/_rabbit-mq/exchanges.ts` |
-| Queues | `src/application/_rabbit-mq/queues.ts` |
-| Consumers | `src/application/_rabbit-mq/consumers/<nome>.consumer.ts` |
+| Exchanges | `src/infra/rabbitmq/exchanges.ts` |
+| Queues | `src/infra/rabbitmq/queues.ts` |
+| Messages | `src/infra/rabbitmq/messages/<nome>.message.ts` |
+| Consumers de infra | `src/infra/rabbitmq/consumers/<nome>.consumer.ts` |
+| Consumers de negócio | `src/application/<módulo>/consumers/<nome>.consumer.ts` |
+
+Consumers de **infra** são genéricos (ex: `SampleConsumer`). Consumers de **negócio** ficam junto ao módulo que os usa (ex: `GroupPermissionsUpdatedConsumer` em `application/iam/consumers/`).
 
 Tipos de fila:
 - `round-robin` (padrão) — load balance entre consumers

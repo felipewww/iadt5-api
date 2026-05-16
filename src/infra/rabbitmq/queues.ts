@@ -1,5 +1,5 @@
 import * as RabbitMQ from 'src/infra/framework/rabbitmq/module';
-import { Exchanges } from 'src/application/_rabbit-mq/exchanges';
+import { Exchanges } from '@/infra/rabbitmq/exchanges';
 
 interface IQueues extends RabbitMQ.IQueuesDefinitions {
     QUEUE_SAMPLE: RabbitMQ.Queue;
@@ -8,5 +8,5 @@ interface IQueues extends RabbitMQ.IQueuesDefinitions {
 
 export const Queues: IQueues = {
     QUEUE_SAMPLE: new RabbitMQ.Queue('queue-sample', Exchanges.EXC_SAMPLE),
-    EVT_GROUP_PERMISSIONS_UPDATED: new RabbitMQ.EventQueue(Exchanges.EXC_IAM),
+    EVT_GROUP_PERMISSIONS_UPDATED: new RabbitMQ.EventQueue(Exchanges.EXC_IAM_GROUP_PERMISSIONS),
 };

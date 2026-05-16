@@ -4,7 +4,7 @@ import { SyncGroupPermissionsCommand } from '@/domain/dtos/iam/groups/commands/s
 import { IamGroupsRepository } from '@/application/iam/infra/db/postgres/iam-groups.repository';
 import { GroupPermissionsCache } from '@/infra/cache/group-permissions.cache';
 import { ProducerRegistry } from '@/infra/rabbitmq/producer-registry.service';
-import { GroupPermissionsUpdatedMessage } from '@/application/_rabbit-mq/messages/group-permissions-updated.message';
+import { GroupPermissionsUpdatedMessage } from '@/infra/rabbitmq/messages/group-permissions-updated.message';
 import { manifest } from '@/infra/manifest/manifest';
 
 type Input = { groupId: number; data: SyncGroupPermissionsCommand };
