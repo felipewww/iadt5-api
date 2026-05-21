@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ProjectsRepository } from '@/application/projects/infra/db/postgres/projects.repository';
 import { DocumentsService } from '@/infra/documents/documents.service';
 import { JobsService } from '@/infra/jobs/jobs.service';
@@ -11,6 +11,8 @@ import { projectsBucket } from '@/application/projects/infra/s3/projects-bucket'
 import { manifest } from '@/infra/manifest/manifest';
 
 const THREE_DAYS_SECONDS = 60 * 60 * 24 * 3;
+const MAX_FILE_BYTES     = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
 @Injectable()
 export class UploadProjectAnalysisHandler {
@@ -25,6 +27,16 @@ export class UploadProjectAnalysisHandler {
     async execute(projectId: number, file: MulterFile): Promise<AnalysisUploadOutput> {
         const existing = await this.repository.findById(projectId);
         if (!existing) throw new NotFoundException('Projeto não encontrado');
+
+        if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+            throw new BadRequestException('Tipo de arquivo não suportado. Envie um PDF ou imagem (PNG, JPEG, GIF, WEBP).');
+        }
+
+        if (file.size > MAX_FILE_BYTES) {
+            throw new BadRequestException(
+                `Arquivo muito grande: ${(file.size / 1024 / 1024).toFixed(1)} MB. O limite é ${MAX_FILE_BYTES / 1024 / 1024} MB.`,
+            );
+        }
 
         let jobResult: Awaited<ReturnType<JobsService['create']>>;
         try {

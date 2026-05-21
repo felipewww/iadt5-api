@@ -89,7 +89,7 @@ async function handleAnalysisFileChange(event: Event) {
         analysisToken.value = result
         noAnalysis.value = false
     } catch (err: any) {
-        uploadError.value = err?.response?.data?.message ?? 'Erro ao enviar análise'
+        uploadError.value = err?.response?.data?.errors?.[0] ?? err?.response?.data?.error ?? 'Erro ao enviar análise'
     } finally {
         uploadingAnalysis.value = false
         input.value = ''
@@ -396,6 +396,7 @@ async function submit() {
                     :job-id="analysisToken.jobId"
                     :stream-token="analysisToken.streamToken"
                     @cancelled="onAnalysisCancelled"
+                    @reupload="triggerAnalysisUpload"
                 />
 
             </div>

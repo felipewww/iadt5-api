@@ -26,6 +26,7 @@ export interface JobStep {
 export interface JobOutput {
     jobId: string
     status: 'CREATED' | 'RUNNING' | 'DONE' | 'FAILED'
+    error?: string
     result?: { steps: JobStep[] }
     createdAt: string
     updatedAt: string

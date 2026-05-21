@@ -162,7 +162,7 @@ async function handleAnalysisFileChange(event: Event) {
         await load()
         await router.push({ name: 'projects-form', params: { id: projectId }, query: { tab: 'analysis' } })
     } catch (err: any) {
-        analysisError.value = err?.response?.data?.message ?? 'Serviço de análise indisponível. Tente novamente mais tarde.'
+        analysisError.value = err?.response?.data?.errors?.[0] ?? err?.response?.data?.error ?? 'Serviço de análise indisponível. Tente novamente mais tarde.'
     } finally {
         uploadingAnalysisId.value = null
         input.value = ''

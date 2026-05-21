@@ -42,6 +42,8 @@ const EvaluationSchema = z.object({
     recommendations: z.array(z.string()),
 });
 
+const MAX_ITERATIONS = 3;
+
 const ANALYZE_PROMPT = `Você é um especialista em arquitetura de software.
 
 Analise o diagrama/documento fornecido e SEMPRE retorne um JSON estruturado com os componentes, relacionamentos, padrões e tecnologias que conseguir identificar — mesmo que o mapeamento seja parcial ou incerto em alguns pontos.
@@ -80,16 +82,38 @@ export class AnalysisGraphService implements OnModuleInit {
         const llmEvaluation = this.llmService.model.withStructuredOutput(EvaluationSchema);
 
         const extractArchitecture = async (state: AnalysisState): Promise<Partial<AnalysisState>> => {
-            const diagramMessage = new HumanMessage({ content: this.buildMultimodalContent(state) });
-            const result = await llmAnalysis.invoke([
+            const textMessage = new HumanMessage({
+                content: [{ type: 'text' as const, text: `Texto extraído via OCR:\n\n${state.ocrText}` }],
+            });
+
+            // Primeira passagem: só texto (mais barata)
+            let result = await llmAnalysis.invoke([
                 new SystemMessage(ANALYZE_PROMPT),
-                diagramMessage,
+                textMessage,
                 ...state.messages,
             ]);
 
+            // Se não encontrou componentes e o arquivo tem conteúdo visual, escala para multimodal
+            const isVisual = state.fileMimeType === 'application/pdf' || state.fileMimeType.startsWith('image/');
+            if (result.architecture_json.components.length === 0 && isVisual) {
+                result = await llmAnalysis.invoke([
+                    new SystemMessage(ANALYZE_PROMPT),
+                    new HumanMessage({ content: this.buildMultimodalContent(state) }),
+                    ...state.messages,
+                ]);
+            }
+
             const architectureJson = result.architecture_json as ArchitectureJson;
 
-            if (result.questions.length > 0) {
+            if (architectureJson.components.length === 0) {
+                throw new Error(
+                    'Nenhum componente arquitetural identificado. ' +
+                    'Verifique se o arquivo contém um diagrama de arquitetura de software.',
+                );
+            }
+
+            const limitReached = state.iterationCount >= MAX_ITERATIONS;
+            if (result.questions.length > 0 && !limitReached) {
                 return {
                     architectureJson,
                     pendingQuestions: result.questions,
@@ -105,6 +129,8 @@ export class AnalysisGraphService implements OnModuleInit {
             return {
                 messages: [new HumanMessage(String(answer))],
                 pendingQuestions: [],
+
+                iterationCount: state.iterationCount + 1,
             };
         };
 

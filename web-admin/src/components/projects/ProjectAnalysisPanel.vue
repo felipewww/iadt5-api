@@ -351,10 +351,10 @@ function scoreColor(score: number): string {
                     <!-- Failed state -->
                     <div
                         v-if="isFailed"
-                        class="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300"
+                        class="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300"
                     >
-                        <CircleAlert :size="16" class="shrink-0" />
-                        Ocorreu um erro durante a análise. Tente enviar o arquivo novamente.
+                        <CircleAlert :size="16" class="shrink-0 mt-0.5" />
+                        <span>{{ job?.error ?? 'Ocorreu um erro durante a análise. Tente enviar o arquivo novamente.' }}</span>
                     </div>
 
                     <!-- Running with no notable step yet -->

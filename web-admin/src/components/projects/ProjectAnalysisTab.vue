@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import {
     CircleCheckBig, Circle, LoaderCircle, CircleAlert,
-    MessageSquare, Star, ThumbsUp, ThumbsDown, Lightbulb, Layers, Trash2,
+    MessageSquare, Star, ThumbsUp, ThumbsDown, Lightbulb, Layers, Trash2, Upload,
 } from '@lucide/vue'
 import { useJobStream } from '@/composables/useJobStream'
 import { useProjectsStore } from '@/stores/projects'
@@ -14,7 +14,7 @@ const props = defineProps<{
     streamToken: string
 }>()
 
-const emit = defineEmits<{ cancelled: [] }>()
+const emit = defineEmits<{ cancelled: []; reupload: [] }>()
 
 const store = useProjectsStore()
 const { job, error: streamError } = useJobStream(props.jobId, props.streamToken)
@@ -25,6 +25,12 @@ const jobStatus = computed(() => job.value?.status ?? 'RUNNING')
 const ocrStep    = computed(() => steps.value.find((s) => s.name === 'ocr-extract'))
 const waitStep   = computed(() => steps.value.find((s) => s.name === 'analyzer-awaiting-reply'))
 const resultStep = computed(() => steps.value.find((s) => s.name === 'analyzer-result'))
+const errorStep  = computed(() => steps.value.find((s) => s.name === 'analyzer-error'))
+
+const failureMessage = computed(() =>
+    errorStep.value?.data?.message ??
+    'Ocorreu um erro durante a análise. Tente enviar o arquivo novamente.'
+)
 
 const isAwaiting = computed(() => jobStatus.value === 'RUNNING' && !!waitStep.value)
 const isDone     = computed(() => jobStatus.value === 'DONE')
@@ -298,12 +304,20 @@ function scoreColor(score: number): string {
             </div>
 
             <!-- Failed -->
-            <div
-                v-if="isFailed"
-                class="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300"
-            >
-                <CircleAlert :size="16" class="shrink-0" />
-                Ocorreu um erro durante a análise. Tente enviar o arquivo novamente.
+            <div v-if="isFailed" class="space-y-3">
+                <div class="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+                    <CircleAlert :size="16" class="shrink-0 mt-0.5" />
+                    <span>{{ failureMessage }}</span>
+                </div>
+                <div class="flex justify-end">
+                    <button
+                        class="flex items-center gap-2 px-4 py-2 rounded-lg border border-emerald-600 dark:border-emerald-400 text-emerald-600 dark:text-emerald-400 text-sm font-medium hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                        @click="emit('reupload')"
+                    >
+                        <Upload :size="14" />
+                        Nova análise
+                    </button>
+                </div>
             </div>
 
             <!-- Running, no steps yet -->

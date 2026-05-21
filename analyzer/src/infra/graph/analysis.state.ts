@@ -39,6 +39,7 @@ export const AnalysisAnnotation = Annotation.Root({
     architectureJson:  Annotation<ArchitectureJson | null>({ reducer: (_, b) => b, default: () => null }),
     pendingQuestions:  Annotation<string[]>({ reducer: (_, b) => b, default: () => [] }),
     evaluation:        Annotation<EvaluationResult | null>({ reducer: (_, b) => b, default: () => null }),
+    iterationCount:    Annotation<number>({ reducer: (_, b) => b, default: () => 0 }),
 });
 
 export type AnalysisState = typeof AnalysisAnnotation.State;

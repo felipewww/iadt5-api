@@ -405,3 +405,78 @@ curl http://localhost:3300/analysis/<sessionId>
 | `TS2307: Cannot find module 'amqplib'` | Volume `analyzer_modules` stale | `docker rm -f fiap-analyzer && docker volume rm 1_1_analyzer_modules && docker compose up fiap-analyzer --build -d` |
 | Panel SSE sem updates | `COGNITE_JOBS_SECRET` diferente entre API e platform-jobs | Verificar `.env` dos dois serviços |
 | Analyzer não recebe mensagem | Exchange/queue mal declaradas | Verificar `exchanges.ts` e `queues.ts` no analyzer |
+
+---
+
+## Justificativa da abordagem de IA
+
+### Por que LLM multimodal com grafo explícito (LangGraph)
+
+Diagramas de arquitetura de software não seguem um schema fixo: cada equipe usa notações diferentes (UML, C4, caixas livres, setas coloridas, etc.). Abordagens baseadas em regras ou parsers deterministicos falham quando a notação muda. Um LLM multimodal consegue inferir intenção mesmo com notação inconsistente, nomes ambíguos ou texto parcialmente legível.
+
+O uso do **LangGraph** em vez de uma chamada única ao LLM traz três vantagens:
+
+1. **Controle explícito do fluxo** — cada nó tem responsabilidade única (extrair, perguntar, avaliar). O pipeline não é uma caixa-preta; cada transição é auditável.
+2. **Human-in-the-loop estruturado** — o `interrupt()` pausa o grafo de forma determinística, persiste o estado no MongoDB e retoma exatamente do ponto correto após a resposta do usuário. Isso é impossível com chamadas LLM stateless.
+3. **Separação entre extração e avaliação** — o nó `extractArchitecture` produz um JSON estruturado que o nó `evaluateArchitecture` avalia de forma independente. Isso reduz o risco de o LLM "inventar" uma avaliação sem base em dados concretos.
+
+A combinação **OCR + LLM** é adotada porque: (a) o OCR extrai texto embutido de forma barata e determinística; (b) o LLM recebe esse texto junto com o arquivo original como contexto multimodal, o que melhora a extração de componentes cujos nomes aparecem nas labels visuais.
+
+### Por que a extração de texto precede a chamada multimodal
+
+A primeira passagem usa **somente o texto OCR** (mais barato). A chamada multimodal (com o arquivo completo em base64) só é feita se nenhum componente for identificado na passagem de texto. Para diagramas com labels textuais ricas — a maioria dos casos — isso evita o custo adicional da entrada multimodal.
+
+---
+
+## Guardrails implementados
+
+Guardrails são mecanismos de controle que limitam entradas inválidas, forçam saídas estruturadas e evitam que o modelo produza resultados inutilizáveis ou entre em loops.
+
+### Controle de entrada
+
+| Guardrail | Onde | Comportamento |
+|---|---|---|
+| Whitelist de MIME type | `api/` — `UploadProjectAnalysisHandler` | Rejeita arquivos que não sejam PDF, PNG, JPEG, GIF ou WEBP com `400 Bad Request` antes do upload para S3 |
+| Limite de tamanho (5 MB) | `api/` — `UploadProjectAnalysisHandler` | Rejeita arquivos maiores com `400 Bad Request` antes de criar o job ou fazer upload |
+
+### Controle de saída
+
+| Guardrail | Onde | Comportamento |
+|---|---|---|
+| Structured Output (Zod) | `analyzer/` — `analysis.graph.ts` | `withStructuredOutput(AnalysisOutputSchema)` força o LLM a retornar JSON válido. Se o schema não for satisfeito, a chamada lança exceção antes de propagar dados inválidos |
+| Score limitado 0–10 | `analyzer/` — `EvaluationSchema` (Zod) | `z.number().min(0).max(10)` impede scores fora da escala |
+| Arrays com default `[]` | `analyzer/` — `AnalysisOutputSchema` (Zod) | Campos como `components`, `relationships`, `patterns` e `technologies` nunca são `null` ou `undefined` |
+
+### Mitigação de alucinações
+
+| Mecanismo | Onde | Comportamento |
+|---|---|---|
+| Validação de conteúdo mínimo | `analyzer/` — `extractArchitecture` (grafo) | Se `components.length === 0` após texto E multimodal, lança erro com mensagem orientativa — evita que o LLM gere um relatório sobre um arquivo que não é um diagrama |
+| Human-in-the-loop | `analyzer/` — `waitForHuman` (grafo) | Quando o LLM identifica ambiguidades, lista dúvidas específicas e aguarda resposta do usuário antes de prosseguir. A resposta é incorporada ao histórico e usada para refinar o JSON extraído |
+| Limite de iterações (`MAX_ITERATIONS = 3`) | `analyzer/` — `extractArchitecture` (grafo) | Após 3 ciclos de perguntas/respostas, o grafo força a continuação para avaliação mesmo que o LLM ainda queira perguntar — evita loops infinitos |
+| Validação de consistência | `analyzer/` — `AnalysisPipelineService` | Verifica se todos os `from`/`to` dos relacionamentos referenciam componentes existentes. Inconsistências são registradas em `consistency_issues` no step `analyzer-result` |
+
+### Tratamento de falhas
+
+| Mecanismo | Onde | Comportamento |
+|---|---|---|
+| Try-catch com step de erro | `analyzer/` — `AnalysisRequestConsumer` | Qualquer falha no pipeline adiciona o step `analyzer-error` com a mensagem descritiva e marca o job como `FAILED` |
+| Requeue automático | `analyzer/` — `Consumer` base | Mensagem rejeitada é reenfileirada pelo RabbitMQ se ainda não foi reentregue (`!redelivered`) |
+
+---
+
+## Limitações conhecidas do modelo
+
+1. **OCR falha em diagramas de alta densidade visual** — imagens com muitos componentes sobrepostos, fontes pequenas ou baixa resolução produzem texto OCR incompleto. O LLM recebe o arquivo original via multimodal, mas a qualidade da extração depende da legibilidade visual.
+
+2. **O LLM pode inferir relacionamentos não explícitos** — se o diagrama sugere uma conexão mas não a desenha explicitamente, o modelo pode incluí-la no JSON com base em padrões arquiteturais conhecidos. Isso é detectável pelo campo `consistency_issues` apenas quando o nome do componente está errado; inferências sutis não são capturadas.
+
+3. **Score subjetivo e não-determinístico** — a nota de 0 a 10 varia entre chamadas para o mesmo diagrama. Dois usuários que analisam o mesmo arquivo podem receber scores diferentes. O score deve ser interpretado como orientação, não como métrica absoluta.
+
+4. **Componentes implícitos não detectados** — elementos de infraestrutura comuns não desenhados (CDN, load balancer, firewall) não aparecem no JSON extraído, mesmo que sejam pressupostos pela arquitetura descrita.
+
+5. **Limite de contexto em diagramas complexos** — PDFs com muitas páginas ou imagens de alta resolução consomem grande parte da janela de contexto do LLM. Arquiteturas muito grandes podem ter componentes ignorados ou descrições truncadas.
+
+6. **Dependência de qualidade do OCR para a passagem barata** — a estratégia de text-first só funciona bem quando o diagrama contém labels textuais legíveis. Diagramas puramente visuais (sem texto nas caixas) sempre caem no caminho multimodal, que é mais caro e mais lento.
+
+7. **Human-in-the-loop não garante convergência** — mesmo com o limite de 3 iterações, o LLM pode não incorporar adequadamente uma resposta do usuário se ela contradiz fortemente o que foi extraído visualmente. O histórico de mensagens mitiga isso, mas não elimina o problema.

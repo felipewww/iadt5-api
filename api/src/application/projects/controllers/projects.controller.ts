@@ -75,6 +75,7 @@ export class ProjectsController {
     @UseInterceptors(FileInterceptor('file'))
     uploadCover(@HashId('id') id: number, @UploadedFile() file: MulterFile) {
         return this.uploadCoverHandler.execute(id, file);
+
     }
 
     @Post(':id/analysis')

@@ -41,8 +41,8 @@ export class AnalysisRequestConsumer extends Consumer<AnalyzerRequestMessage> {
         try {
             this.logger.log(`[ANALYZER] baixando arquivo | job=${jobId}`);
             const fileRes = await axios.get<ArrayBuffer>(fileUrl, { responseType: 'arraybuffer' });
-            const fileContentBase64 = Buffer.from(fileRes.data).toString('base64');
             this.logger.log(`[ANALYZER] arquivo baixado (${fileRes.data.byteLength} bytes) | job=${jobId}`);
+            const fileContentBase64 = Buffer.from(fileRes.data).toString('base64');
 
             this.logger.log(`[ANALYZER] baixando resultado OCR | job=${jobId}`);
             const ocrRes = await axios.get<OcrResult>(ocrResultUrl);
@@ -59,8 +59,16 @@ export class AnalysisRequestConsumer extends Consumer<AnalyzerRequestMessage> {
 
             await this.pipelineService.processState(jobId, state);
         } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
             this.logger.error(`[ANALYZER] falha | job=${jobId}`, err);
-            await this.jobsService.patchStatus(jobId, 'FAILED', String(err));
+            try {
+                await this.jobsService.addStep(jobId, {
+                    name: 'analyzer-error',
+                    data: { message },
+                    status: 0,
+                });
+            } catch { /* noop — não bloqueia o FAILED */ }
+            await this.jobsService.patchStatus(jobId, 'FAILED', message);
             throw err;
         }
     }
