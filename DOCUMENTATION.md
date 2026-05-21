@@ -349,6 +349,36 @@ O SSE é uma conexão de longa duração. 2h é suficiente para uma análise com
 
 `@langchain/anthropic@1.4.0` (necessário para corrigir o bug `top_p: -1` da versão anterior) tem conflitos de peer dependencies com outras libs do LangChain. A flag resolve sem forçar resoluções incorretas.
 
+### Por que o S3 é usado como bus de arquivos entre serviços
+
+Os serviços do pipeline (OCR, Analyzer) são assíncronos e se comunicam via RabbitMQ. Colocar o conteúdo binário do arquivo diretamente na mensagem seria inviável: RabbitMQ não foi projetado para payloads grandes e isso saturaria a memória do broker rapidamente para arquivos de 5–10 MB.
+
+**Estratégia adotada:** a `api` faz o único upload do arquivo para o S3 e gera uma **presigned URL** com validade de 3 dias. A partir daí, todos os serviços trafegam apenas essa URL — nunca o binário.
+
+```
+Usuário → api → S3 (upload original)
+                 └─ presigned URL → RabbitMQ → ocr (baixa, processa)
+                                                └─ salva OCR JSON no S3
+                                                └─ presigned URL do OCR → RabbitMQ → analyzer (baixa JSON + arquivo)
+```
+
+**Benefícios:**
+
+| Benefício | Detalhe |
+|---|---|
+| Mensagens leves no broker | RabbitMQ trafega apenas strings de URL, independente do tamanho do arquivo |
+| Serviços desacoplados | Nenhum serviço conhece o endereço do outro; apenas consomem a URL da mensagem |
+| Resiliência a retries | Se OCR ou Analyzer falharem e a mensagem for reenfileirada, a URL ainda é válida (3 dias) |
+| Rastreabilidade | Arquivo original e resultado OCR ficam acessíveis para inspeção manual durante esse período |
+
+**O que vai para o S3:**
+
+| Arquivo | Caminho | Quem grava | Quem lê |
+|---|---|---|---|
+| Diagrama original | `projects/{projectId}/analysis/{jobId}_original.{ext}` | `api` | `ocr`, `analyzer` |
+| Resultado OCR (JSON) | `projects/{projectId}/analysis/{jobId}_ocr.json` | `ocr` | `analyzer` |
+| Thumbnail do projeto | `projects/{projectId}/thumbnail.{ext}` | `api` (upload de capa) | `api` (presigned GET) |
+
 ### Nomenclatura de arquivos no S3
 
 Antes: PDF e JSON OCR tinham timestamps diferentes, dificultando correlação manual. Agora: ambos usam `{jobId}` como prefixo — `{jobId}_original.{ext}` e `{jobId}_ocr.json`.
