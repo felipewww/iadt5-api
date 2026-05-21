@@ -1,14 +1,37 @@
-# Fiap Systems — Main API Fiap
+# Fiap SS — Pipeline de Análise de Arquitetura
 
-Monorepo do projeto. Contém quatro serviços: API principal, OCR, analisador de arquitetura com IA e frontend.
+Sistema SaaS para avaliação automática de diagramas de arquitetura de software. O usuário faz upload de um PDF ou imagem, e um pipeline de IA extrai os componentes, avalia a qualidade da arquitetura e gera um relatório com score, pontos fortes, pontos fracos e recomendações.
 
-| Campo | Valor |
-|---|---|
-| clientId | 1 |
-| projectId | 1 |
-| uid | `_1_1` |
-| clientName | Fiap Systems |
-| projectName | Main API Fiap |
+---
+
+## Arquitetura geral
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Monorepo _1_1/                                                 │
+│                                                                 │
+│  ┌──────────────┐   HTTP    ┌──────────────────────────────┐   │
+│  │  web-admin   │◄─────────►│  api  :3000                  │   │
+│  │  Vue 3/Vite  │           │  NestJS + Postgres + RabbitMQ│   │
+│  │  :5173       │           └──────────────┬───────────────┘   │
+│  └──────────────┘                          │ RabbitMQ           │
+│                                            ▼                   │
+│                              ┌─────────────────────────┐       │
+│  ┌─────────────┐             │  ocr  :3201             │       │
+│  │ jobs :3100  │◄────────────│  Python/FastAPI          │       │
+│  │ SSE + steps │             │  pdfplumber + tesseract  │       │
+│  └──────┬──────┘             └──────────┬──────────────┘       │
+│         │ SSE                           │ RabbitMQ              │
+│         │                              ▼                        │
+│         │              ┌───────────────────────────────┐        │
+│         └─────────────►│  analyzer  :3300              │        │
+│                        │  NestJS + LangGraph           │        │
+│                        │  Anthropic / OpenAI           │        │
+│                        └───────────────────────────────┘        │
+│                                                                 │
+│  Infra: Postgres · RabbitMQ · MongoDB (no próprio compose)     │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -16,111 +39,199 @@ Monorepo do projeto. Contém quatro serviços: API principal, OCR, analisador de
 
 | Serviço | Pasta | Stack | Porta | Responsabilidade |
 |---|---|---|---|---|
-| API | `api/` | NestJS + TypeScript | 4000 | IAM, autenticação, regras de negócio |
-| OCR | `ocr/` | FastAPI + Python | 3201 | Extração de texto de PDFs e imagens |
-| Analyzer | `analyzer/` | NestJS + LangGraph | 3300 | Análise de arquitetura com IA |
-| Web Admin | `web-admin/` | Vue + Vite | 5173 | Interface administrativa |
+| API | `api/` | NestJS, TypeScript, Postgres | 3000 | IAM, autenticação, projetos, orquestração do pipeline |
+| OCR | `ocr/` | Python, FastAPI, pdfplumber, pytesseract | 3201 | Extração de texto de PDFs e imagens |
+| Analyzer | `analyzer/` | NestJS, LangGraph, LangChain | 3300 | Análise de arquitetura com LLM multimodal |
+| Web Admin | `web-admin/` | Vue 3, Vite, Tailwind CSS v4 | 5173 | Interface do usuário |
+| Jobs | `jobs/` | — | 3100 | Gerenciamento de jobs assíncronos e SSE |
 
 ---
 
-## Arquitetura geral
+## Pipeline de análise
 
 ```
-web-admin (5173)
-    │
-    ▼
-api (4000) ──── PostgreSQL / RabbitMQ / MongoDB
-                        (../platform)
+1. Usuário faz upload do diagrama (PDF ou imagem)
+        │
+        ▼
+2. API valida o arquivo (tipo + tamanho ≤ 5 MB),
+   cria job, salva no S3 e publica na fila OCR
+        │
+        ▼
+3. OCR extrai texto (pdfplumber para PDF, tesseract para imagens)
+   salva resultado no S3 e publica na fila Analyzer
+        │
+        ▼
+4. Analyzer executa grafo LangGraph:
 
-PDF/Imagem
-    │
-    ▼
-ocr (3201)  ◄──── analyzer (3300)
-                       │
-                       ▼
-               LLM (Anthropic / OpenAI)
+   extractArchitecture
+   ├── Tenta primeiro com texto OCR (mais barato)
+   ├── Se components = 0: escala para chamada multimodal (PDF/imagem + texto)
+   ├── Se ainda components = 0: falha com mensagem orientativa
+   │
+   ├── Se LLM tem dúvidas (e iterações < 3):
+   │       waitForHuman ──► usuário responde ──► extractArchitecture (loop)
+   │
+   └── Sem dúvidas (ou limite de 3 iterações atingido):
+           evaluateArchitecture ──► score 0–10 + relatório
+
+        │
+        ▼
+5. Frontend acompanha em tempo real via SSE
+   e exibe o resultado assim que o job finaliza
 ```
-
-O fluxo de análise de arquitetura:
-1. `analyzer` recebe o arquivo e chama `ocr` para extrair o texto
-2. Envia arquivo + texto extraído para o LLM (multimodal)
-3. Se o LLM tiver dúvidas, pausa e aguarda resposta do usuário (LangGraph human-in-the-loop)
-4. Com a arquitetura mapeada em JSON, um segundo LLM avalia e gera score + relatório
 
 ---
 
 ## Pré-requisitos
 
-Infra compartilhada (Postgres, RabbitMQ, MongoDB) gerenciada pelo repositório `platform`:
-
-```bash
-cd ../platform
-docker compose up -d
-```
+- Docker e Docker Compose
+- Chave de API: [Anthropic](https://console.anthropic.com) **ou** OpenAI
 
 ---
 
-## Desenvolvimento local
+## Como subir
 
-Cada serviço pode ser rodado individualmente:
-
-```bash
-# API
-cd api && npm install && npm run start:dev
-
-# OCR
-cd ocr && uv pip install . && uvicorn main:app --reload   # requer tesseract-ocr no SO
-
-# Analyzer
-cd analyzer && npm install && npm run start:dev
-
-# Web Admin
-cd web-admin && npm install && npm run dev
-```
-
----
-
-## Docker — subir tudo junto
-
-Crie os arquivos `.env` a partir dos exemplos antes do primeiro `up`:
+### 1. Clonar e preparar os `.env`
 
 ```bash
-cp api/.env.example     api/.env
-cp ocr/.env.example     ocr/.env
+cp api/.env.example      api/.env
 cp analyzer/.env.example analyzer/.env
-# edite analyzer/.env e adicione a API key do LLM
+cp web-admin/.env.example web-admin/.env
 ```
 
-Depois:
+Edite `analyzer/.env` e preencha a chave do LLM:
+
+```env
+# Anthropic (padrão)
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-opus-4-5
+ANTHROPIC_API_KEY=sk-ant-...
+
+# OU OpenAI
+# LLM_PROVIDER=openai
+# LLM_MODEL=gpt-4o
+# OPENAI_API_KEY=sk-...
+```
+
+> As demais variáveis já têm valores funcionais para desenvolvimento local. Veja a seção [Variáveis de ambiente](#variáveis-de-ambiente) para detalhes.
+
+### 2. Subir tudo
 
 ```bash
 docker compose up --build
 ```
 
-Variáveis de porta customizáveis via ambiente:
+O compose sobe em ordem correta: infra (Postgres, RabbitMQ, MongoDB) → jobs → api → ocr → analyzer → web-admin.
 
-| Variável | Padrão |
+### 3. Acessar
+
+| Serviço | URL |
 |---|---|
-| `API_PORT` | 4000 |
-| `OCR_PORT` | 3201 |
-| `ANALYZER_PORT` | 3300 |
-| `WEB_PORT` | 5173 |
-
-> Quando rodando em Docker, substitua `localhost` por `host.docker.internal` nos `.env`
-> de `api/` e `analyzer/` para alcançar os serviços do `platform`.
+| Frontend | http://localhost:5173 |
+| API (Swagger) | http://localhost:3000/api/docs |
+| API (Scalar) | http://localhost:3000/api/reference |
+| RabbitMQ Management | http://localhost:15672 (guest/guest) |
 
 ---
 
-## Deploy — GitHub Actions
+## Usuário padrão
 
-Workflows em `.github/workflows/`:
+Na primeira execução as migrations criam um usuário root:
 
-| Arquivo | Trigger | O que faz |
+| Campo | Valor |
+|---|---|
+| E-mail | `root@root.com` |
+| Senha | `Root@1234` |
+
+---
+
+## Variáveis de ambiente
+
+### `api/.env`
+
+| Variável | Padrão | Descrição |
 |---|---|---|
-| `deploy-api.yml` | push em `main` (`api/**`) | Build e deploy da API |
-| `deploy-web.yml` | push em `main` (`web-admin/**`) | Build e deploy do frontend |
+| `APP_PORT` | `3000` | Porta HTTP da API |
+| `JWT_SECRET` | `change-me-in-production` | Segredo JWT — **trocar em produção** |
+| `HASH_ID_KEY` | `change-me-in-production` | Chave HMAC para ofuscação de IDs — **trocar em produção** |
+| `DB_HOST` | `infra-iadt-postgres` | Host do Postgres (nome do container) |
+| `DB_NAME` | `_1_1` | Nome do banco |
+| `RMQ_HOST` | `infra-iadt-rabbitmq:5672` | Host do RabbitMQ |
 
-Secrets necessárias (Settings → Secrets → Actions):
-- `COGNITE_JOBS_SECRET`
-- Credenciais do provedor de cloud
-- `ANTHROPIC_API_KEY` ou `OPENAI_API_KEY`
+### `analyzer/.env`
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `APP_PORT` | `3300` | Porta HTTP do analyzer |
+| `LLM_PROVIDER` | `anthropic` | `anthropic` ou `openai` |
+| `LLM_MODEL` | `claude-opus-4-5` | Modelo a usar |
+| `ANTHROPIC_API_KEY` | — | **Obrigatório** se provider = anthropic |
+| `OPENAI_API_KEY` | — | Obrigatório se provider = openai |
+| `OCR_SERVICE_URL` | `http://ocr:3201` | URL do serviço OCR (interna ao Docker) |
+
+### `web-admin/.env`
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `VITE_API_URL` | `http://localhost:3000` | URL da API (acessada pelo browser) |
+
+---
+
+## Comandos úteis
+
+```bash
+# Rebuild de um serviço específico
+docker compose up fiap-analyzer --build -d
+
+# Logs em tempo real
+docker logs fiap-api      -f
+docker logs fiap-ocr      -f
+docker logs fiap-analyzer -f
+
+# Buscar logs de um job específico
+docker logs fiap-analyzer 2>&1 | grep "job=<jobId>"
+
+# Inspecionar estado LangGraph no MongoDB
+docker exec -it infra-iadt-mongodb mongosh
+use analyzer
+db.checkpoints.find({ thread_id: "<jobId>" }).sort({ ts: -1 }).limit(1)
+
+# Testar analyzer diretamente (sem passar pela API)
+curl -X POST http://localhost:3300/analysis \
+  -F "file=@/caminho/para/diagrama.pdf"
+
+curl -X POST http://localhost:3300/analysis/<sessionId>/reply \
+  -H "Content-Type: application/json" \
+  -d '{"answer": "O componente X é um gateway REST..."}'
+```
+
+---
+
+## Guardrails de IA
+
+| Tipo | Mecanismo | Onde |
+|---|---|---|
+| Entrada | Whitelist MIME type (PDF, PNG, JPEG, GIF, WEBP) | `api/` |
+| Entrada | Limite de tamanho (5 MB) | `api/` |
+| Saída | Structured Output via Zod (`withStructuredOutput`) | `analyzer/` |
+| Saída | Score limitado 0–10 pelo schema | `analyzer/` |
+| Alucinação | Bloqueio quando nenhum componente é identificado | `analyzer/` |
+| Alucinação | Human-in-the-loop com limite de 3 iterações | `analyzer/` |
+| Consistência | Validação de referências em relacionamentos | `analyzer/` |
+
+---
+
+## Erros comuns
+
+| Sintoma | Causa | Solução |
+|---|---|---|
+| Analyzer não inicia | `ANTHROPIC_API_KEY` não preenchida | Editar `analyzer/.env` |
+| `BadRequestError: top_p: -1` | `@langchain/anthropic` desatualizado | Não regredir abaixo de `1.4.0` |
+| SSE sem atualizações | `COGNITE_JOBS_SECRET` divergente | Verificar `.env` da api e do jobs |
+| Volume de node_modules stale | Cache Docker desatualizado | `docker rm -f fiap-analyzer && docker volume rm _1_1_analyzer_modules && docker compose up fiap-analyzer --build -d` |
+
+---
+
+## Documentação técnica
+
+Para detalhes de cada serviço, fluxos completos, decisões de design, guardrails implementados e limitações do modelo, consulte [`DOCUMENTATION.md`](./DOCUMENTATION.md).
