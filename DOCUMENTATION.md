@@ -21,24 +21,19 @@ A análise é feita por um pipeline assíncrono de três etapas (API → OCR →
 │  │  :5173       │             │  Postgres + S3 + RabbitMQ       │   │
 │  └──────────────┘             └──────┬──────────────────────────┘   │
 │                                      │ RabbitMQ                     │
-│  ┌───────────────────────────────────▼──────────────────────────┐   │
-│  │  platform (rede Docker compartilhada)                        │   │
-│  │                                                              │   │
-│  │  ┌─────────────┐   ┌──────────────┐   ┌──────────────────┐  │   │
-│  │  │ platform-   │   │ platform-    │   │  platform-       │  │   │
-│  │  │ rabbitmq    │   │ jobs :3100   │   │  mongodb :27017  │  │   │
-│  │  │ :5672       │   │ SSE + steps  │   │  threads LGraph  │  │   │
-│  │  └──────┬──────┘   └──────┬───────┘   └──────────────────┘  │   │
-│  └─────────┼────────────────┼─────────────────────────────────┘   │
-│            │                 │ SSE                                  │
-│  ┌─────────▼──────┐          │                                      │
-│  │  ocr/ :3201    │          └─────────────────────────────────┐    │
-│  │  Python/FastAPI│                                            │    │
-│  └─────────┬──────┘          ┌───────────────────────────────┐ │   │
-│            │ RabbitMQ        │  analyzer/ :3300              │ │   │
-│            └────────────────►│  NestJS + LangGraph           │ │   │
-│                              │  MongoDBSaver (threads)       │◄┘   │
-│                              └───────────────────────────────┘     │
+│  ┌──────────┐  ┌──────────────┐  ┌──────────────────┐             │
+│  │ RabbitMQ │  │ jobs :3100   │  │ MongoDB :27017   │             │
+│  │ :5672    │  │ SSE + steps  │  │ threads LangGraph│             │
+│  └────┬─────┘  └──────┬───────┘  └──────────────────┘             │
+│       │               │ SSE                                        │
+│  ┌────▼───────┐        │                                           │
+│  │ ocr/ :3201 │        └───────────────────────────────┐           │
+│  │ Python/    │                                        │           │
+│  │ FastAPI    │        ┌───────────────────────────┐   │           │
+│  └─────┬──────┘        │  analyzer/ :3300          │   │           │
+│        │ RabbitMQ      │  NestJS + LangGraph       │◄──┘           │
+│        └──────────────►│  MongoDBSaver (threads)   │               │
+│                        └───────────────────────────┘               │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -55,7 +50,7 @@ API principal da aplicação. Gerencia projetos, usuários, permissões e orques
 
 **Módulos relevantes para análise:**
 - `ProjectsModule` — CRUD de projetos + endpoints de análise
-- `JobsModule` (`infra/jobs/`) — client HTTP para `platform-jobs`, geração de `streamToken` JWT
+- `JobsModule` (`infra/jobs/`) — client HTTP para `infra-iadt-jobs`, geração de `streamToken` JWT
 - `DocumentsModule` (`infra/documents/`) — upload para S3 com geração de thumbnail
 - `AwsModule` (`infra/aws/`) — S3Service com presigned URLs
 
@@ -69,7 +64,7 @@ API principal da aplicação. Gerencia projetos, usuários, permissões e orques
 
 **Fluxo de `POST /projects/:id/analysis`:**
 1. Verifica se o projeto existe
-2. `JobsService.create()` → cria job no platform-jobs, assina JWT `{ jobId, tenantId }` como `streamToken`
+2. `JobsService.create()` → cria job no `infra-iadt-jobs`, assina JWT `{ jobId, tenantId }` como `streamToken`
 3. `DocumentsService.upload()` → salva arquivo no S3 com `namePrefix = jobId`
 4. Atualiza projeto: `analysis_document_id`, `analysis_job_id`
 5. Gera presigned URL do arquivo (3 dias)
@@ -109,7 +104,7 @@ Coração da análise. Orquestra um grafo LangGraph multimodal com human-in-the-
 
 #### LangGraph — `infra/graph/analysis.graph.ts`
 
-O grafo tem três nós e state persistido via `MongoDBSaver` (db `analyzer` em `platform-mongodb`):
+O grafo tem três nós e state persistido via `MongoDBSaver` (db `analyzer` em `infra-iadt-mongodb`):
 
 ```
 START
@@ -167,7 +162,7 @@ Consome `_1_1_queue-analyzer`:
 
 #### AnalysisPipelineService — `infra/jobs/analysis-pipeline.service.ts`
 
-Traduz o estado do grafo em operações no `platform-jobs`:
+Traduz o estado do grafo em operações no `infra-iadt-jobs`:
 
 ```
 state.pendingQuestions.length > 0
@@ -285,18 +280,18 @@ Drawer deslizando da direita. Estados visuais baseados nos steps e status do job
 
 ---
 
-## Infraestrutura compartilhada (platform)
+## Infraestrutura
 
-Os serviços de cliente (`api/`, `ocr/`, `analyzer/`) se conectam à rede Docker `platform_default` para acessar:
+Toda a infraestrutura está declarada no `docker-compose.yml` do próprio monorepo — não há dependência de repositório externo.
 
-| Serviço | Endereço interno | Papel |
+| Container | Endereço interno | Papel |
 |---|---|---|
-| `platform-jobs` | `http://platform-jobs:3100` | Jobs assíncronos + SSE |
-| `platform-rabbitmq` | `amqp://guest:guest@platform-rabbitmq:5672` | Mensageria |
-| `platform-mongodb` | `mongodb://admin:secret@platform-mongodb:27017` | Threads LangGraph |
-| `platform-postgres` | — | Banco de dados da API |
+| `infra-iadt-jobs` | `http://infra-iadt-jobs:3100` | Jobs assíncronos + SSE |
+| `infra-iadt-rabbitmq` | `amqp://guest:guest@infra-iadt-rabbitmq:5672` | Mensageria |
+| `infra-iadt-mongodb` | `mongodb://infra-iadt-mongodb:27017` | Threads LangGraph |
+| `infra-iadt-postgres` | `postgres://admin:secret@infra-iadt-postgres:5432` | Banco de dados da API |
 
-### platform-jobs
+### infra-iadt-jobs
 
 Gerencia jobs assíncronos e SSE. API simples:
 
@@ -329,8 +324,8 @@ docker restart fiap-analyzer
 ```
 
 **Arquivos `.env` necessários (copiar de `.env.example`):**
-- `analyzer/.env` — preencher `ANTHROPIC_API_KEY`
-- `api/.env` — preencher `COGNITE_JOBS_SECRET` (mesmo valor do platform-jobs)
+- `analyzer/.env` — preencher `ANTHROPIC_API_KEY` (ou `OPENAI_API_KEY`)
+- `api/.env` — demais variáveis já têm valores funcionais para dev local
 - `web-admin/.env` — já tem valores default para dev local
 
 ---
@@ -376,7 +371,7 @@ docker logs fiap-analyzer 2>&1 | grep "job=<jobId>"
 ### Verificar estado do LangGraph no MongoDB
 
 ```bash
-docker exec -it platform-mongodb mongosh -u admin -p secret
+docker exec -it infra-iadt-mongodb mongosh
 use analyzer
 db.checkpoints.find({ thread_id: "<jobId>" }).sort({ ts: -1 }).limit(1)
 ```
@@ -403,7 +398,7 @@ curl http://localhost:3300/analysis/<sessionId>
 |---|---|---|
 | `BadRequestError: top_p: -1` | `@langchain/anthropic` desatualizado | Não regredir abaixo de `1.4.0` |
 | `TS2307: Cannot find module 'amqplib'` | Volume `analyzer_modules` stale | `docker rm -f fiap-analyzer && docker volume rm 1_1_analyzer_modules && docker compose up fiap-analyzer --build -d` |
-| Panel SSE sem updates | `COGNITE_JOBS_SECRET` diferente entre API e platform-jobs | Verificar `.env` dos dois serviços |
+| Panel SSE sem updates | `COGNITE_JOBS_SECRET` diferente entre `api/` e `jobs/` | Verificar `.env` dos dois serviços |
 | Analyzer não recebe mensagem | Exchange/queue mal declaradas | Verificar `exchanges.ts` e `queues.ts` no analyzer |
 
 ---
