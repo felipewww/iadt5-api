@@ -24,20 +24,20 @@ O design do pipeline segue três princípios:
 │  │  web-admin   │◄─────────►│  api  :3000                  │   │
 │  │  Vue 3/Vite  │           │  NestJS + Postgres + RabbitMQ│   │
 │  │  :5173       │           └──────────────┬───────────────┘   │
-│  └──────────────┘                          │ RabbitMQ           │
+│  └──────▲───────┘                          │ RabbitMQ          │
+│    SSE  │                                  ▼                   │
+│  ┌──────┴──────┐◄───────────┌──────────────────────────────┐   │
+│  │ jobs :3100  │   HTTP     │  analyzer  :3300             │   │
+│  │ steps + SSE │   steps    │  NestJS + LangGraph          │   │
+│  └─────────────┘            │  Anthropic / OpenAI          │   │
+│                             └──────────────┬───────────────┘   │
+│                                            │ HTTP              │
 │                                            ▼                   │
-│                              ┌─────────────────────────┐       │
-│  ┌─────────────┐             │  ocr  :3201             │       │
-│  │ jobs :3100  │◄────────────│  Python/FastAPI          │       │
-│  │ SSE + steps │             │  pdfplumber + tesseract  │       │
-│  └──────┬──────┘             └──────────┬──────────────┘       │
-│         │ SSE                           │ RabbitMQ              │
-│         │                              ▼                        │
-│         │              ┌───────────────────────────────┐        │
-│         └─────────────►│  analyzer  :3300              │        │
-│                        │  NestJS + LangGraph           │        │
-│                        │  Anthropic / OpenAI           │        │
-│                        └───────────────────────────────┘        │
+│                             ┌──────────────────────────────┐   │
+│                             │  ocr  :3201                  │   │
+│                             │  Python/FastAPI              │   │
+│                             │  pdfplumber + tesseract      │   │
+│                             └──────────────────────────────┘   │
 │                                                                 │
 │  Infra: Postgres · RabbitMQ · MongoDB (no próprio compose)     │
 └─────────────────────────────────────────────────────────────────┘
