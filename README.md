@@ -1,6 +1,16 @@
 # Fiap SS — Pipeline de Análise de Arquitetura
 
-Sistema SaaS para avaliação automática de diagramas de arquitetura de software. O usuário faz upload de um PDF ou imagem, e um pipeline de IA extrai os componentes, avalia a qualidade da arquitetura e gera um relatório com score, pontos fortes, pontos fracos e recomendações.
+Trabalho de conclusão de curso (pós-graduação FIAP) que implementa um sistema SaaS para **avaliação automática de diagramas de arquitetura de software**.
+
+O usuário cria um projeto, faz upload de um diagrama (PDF ou imagem) e o sistema conduz uma análise em três etapas: extração de texto via OCR, mapeamento dos componentes e relacionamentos por um LLM multimodal, e geração de um relatório com **score 0–10**, pontos fortes, pontos fracos e recomendações de melhoria.
+
+O diferencial técnico está no pipeline construído com **LangGraph**: o grafo pode pausar a execução e fazer perguntas ao usuário quando encontra ambiguidades no diagrama (_human-in-the-loop_), retomando automaticamente após a resposta. Todo o progresso é transmitido em tempo real para o frontend via SSE.
+
+O design do pipeline segue três princípios:
+
+- **Fail fast** — validações ocorrem o mais cedo possível: tipo e tamanho do arquivo são rejeitados na API antes de qualquer I/O; arquivos sem componentes identificáveis falham no grafo antes de gerar perguntas ou consumir mais tokens.
+- **Economia de tokens** — a análise tenta primeiro extrair a arquitetura só com o texto do OCR (chamada mais barata); só escala para chamada multimodal (imagem + texto) se nenhum componente for encontrado na primeira tentativa.
+- **Segurança da saída** — o LLM nunca retorna JSON livre: o schema é validado via Zod com `withStructuredOutput`, e uma etapa pós-geração verifica a consistência dos relacionamentos (origens e destinos devem referenciar componentes existentes).
 
 ---
 
@@ -33,6 +43,8 @@ Sistema SaaS para avaliação automática de diagramas de arquitetura de softwar
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+> Para detalhes de cada serviço, fluxos completos, decisões de design, guardrails e limitações do modelo, consulte [`DOCUMENTATION.md`](./DOCUMENTATION.md).
+
 ---
 
 ## Serviços
@@ -47,7 +59,7 @@ Sistema SaaS para avaliação automática de diagramas de arquitetura de softwar
 
 ---
 
-## Pipeline de análise
+## ⚙️ Pipeline de análise
 
 ```
 1. Usuário faz upload do diagrama (PDF ou imagem)
@@ -89,9 +101,19 @@ Sistema SaaS para avaliação automática de diagramas de arquitetura de softwar
 
 ---
 
-## Como subir
+## 🚀 Rodando localmente
 
-### 1. Clonar e preparar os `.env`
+### Opção rápida — `init.sh`
+
+```bash
+./init.sh
+```
+
+O script copia os `.env.example` (se ainda não existirem), sobe todos os containers e aguarda cada serviço ficar disponível. Ao final exibe as URLs de acesso e lembra quais chaves de API precisam ser preenchidas.
+
+### Opção manual
+
+#### 1. Preparar os `.env`
 
 ```bash
 cp api/.env.example      api/.env
@@ -115,7 +137,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 > As demais variáveis já têm valores funcionais para desenvolvimento local. Veja a seção [Variáveis de ambiente](#variáveis-de-ambiente) para detalhes.
 
-### 2. Subir tudo
+#### 2. Subir tudo
 
 ```bash
 docker compose up --build
@@ -123,7 +145,7 @@ docker compose up --build
 
 O compose sobe em ordem correta: infra (Postgres, RabbitMQ, MongoDB) → jobs → api → ocr → analyzer → web-admin.
 
-### 3. Acessar
+### Acessar
 
 | Serviço | URL |
 |---|---|
@@ -136,12 +158,12 @@ O compose sobe em ordem correta: infra (Postgres, RabbitMQ, MongoDB) → jobs �
 
 ## Usuário padrão
 
-Na primeira execução as migrations criam um usuário root:
+Na primeira execução as migrations criam um usuário administrador:
 
 | Campo | Valor |
 |---|---|
-| E-mail | `root@root.com` |
-| Senha | `Root@1234` |
+| E-mail | `admin` |
+| Senha | `secret` |
 
 ---
 
@@ -177,37 +199,7 @@ Na primeira execução as migrations criam um usuário root:
 
 ---
 
-## Comandos úteis
-
-```bash
-# Rebuild de um serviço específico
-docker compose up fiap-analyzer --build -d
-
-# Logs em tempo real
-docker logs fiap-api      -f
-docker logs fiap-ocr      -f
-docker logs fiap-analyzer -f
-
-# Buscar logs de um job específico
-docker logs fiap-analyzer 2>&1 | grep "job=<jobId>"
-
-# Inspecionar estado LangGraph no MongoDB
-docker exec -it infra-iadt-mongodb mongosh
-use analyzer
-db.checkpoints.find({ thread_id: "<jobId>" }).sort({ ts: -1 }).limit(1)
-
-# Testar analyzer diretamente (sem passar pela API)
-curl -X POST http://localhost:3300/analysis \
-  -F "file=@/caminho/para/diagrama.pdf"
-
-curl -X POST http://localhost:3300/analysis/<sessionId>/reply \
-  -H "Content-Type: application/json" \
-  -d '{"answer": "O componente X é um gateway REST..."}'
-```
-
----
-
-## Guardrails de IA
+## 🛡️ Guardrails de IA
 
 | Tipo | Mecanismo | Onde |
 |---|---|---|
@@ -218,20 +210,3 @@ curl -X POST http://localhost:3300/analysis/<sessionId>/reply \
 | Alucinação | Bloqueio quando nenhum componente é identificado | `analyzer/` |
 | Alucinação | Human-in-the-loop com limite de 3 iterações | `analyzer/` |
 | Consistência | Validação de referências em relacionamentos | `analyzer/` |
-
----
-
-## Erros comuns
-
-| Sintoma | Causa | Solução |
-|---|---|---|
-| Analyzer não inicia | `ANTHROPIC_API_KEY` não preenchida | Editar `analyzer/.env` |
-| `BadRequestError: top_p: -1` | `@langchain/anthropic` desatualizado | Não regredir abaixo de `1.4.0` |
-| SSE sem atualizações | `COGNITE_JOBS_SECRET` divergente | Verificar `.env` da api e do jobs |
-| Volume de node_modules stale | Cache Docker desatualizado | `docker rm -f fiap-analyzer && docker volume rm _1_1_analyzer_modules && docker compose up fiap-analyzer --build -d` |
-
----
-
-## Documentação técnica
-
-Para detalhes de cada serviço, fluxos completos, decisões de design, guardrails implementados e limitações do modelo, consulte [`DOCUMENTATION.md`](./DOCUMENTATION.md).
