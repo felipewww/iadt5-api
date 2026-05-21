@@ -101,6 +101,41 @@ O design do pipeline segue três princípios:
 
 ---
 
+## 🧪 CI local com `act`
+
+O pipeline de CI roda **somente localmente** via [`act`](https://github.com/nektos/act), que executa os workflows do GitHub Actions dentro de containers Docker. Os workflows nunca executam no GitHub (guard `vars.RUN_CI == 'true'`).
+
+### Instalação
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
+```
+
+### Uso
+
+```bash
+act              # roda todos os jobs em paralelo
+act -j api       # roda só o job da API
+act -j analyzer  # roda só o analyzer
+act -j jobs-service
+act -j web
+act -j ocr
+```
+
+Na primeira execução o `act` baixa a imagem base (~700MB). As execuções seguintes usam o cache local.
+
+### Jobs disponíveis
+
+| Job | Serviço | Etapas |
+|---|---|---|
+| `api` | `api/` | lint → test → build |
+| `analyzer` | `analyzer/` | lint → build |
+| `jobs-service` | `jobs/` | lint → test → build |
+| `web` | `web-admin/` | type-check → test:unit → build |
+| `ocr` | `ocr/` | ruff (lint) → mypy (type check) |
+
+---
+
 ## 🚀 Rodando localmente
 
 ### Opção rápida — `init.sh`
