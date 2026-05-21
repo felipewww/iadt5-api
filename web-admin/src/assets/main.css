@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+button { cursor: pointer; }
+
+@keyframes slide-in {
+    from { transform: translateX(100%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes collapsible-open {
+    from { height: 0; opacity: 0 }
+    to { height: var(--radix-collapsible-content-height); opacity: 1 }
+}
+
+@keyframes collapsible-close {
+    from { height: var(--radix-collapsible-content-height); opacity: 1 }
+    to { height: 0; opacity: 0 }
+}
+
+/* Class-based dark mode: aplica dark: quando <html> tiver a classe .dark */
+@custom-variant dark (&:is(.dark *));
+
+@utility animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+}
+
+@theme inline {
+    --font-encode: "Encode Sans Semi Expanded", sans-serif;
+    --font-encode-expanded: "Encode Sans Expanded", sans-serif;
+
+    /* Remap gray → zinc para tons mais neutros (sem puxar para azul) */
+    --color-gray-50: var(--color-zinc-50);
+    --color-gray-100: var(--color-zinc-100);
+    --color-gray-200: var(--color-zinc-200);
+    --color-gray-300: var(--color-zinc-300);
+    --color-gray-400: var(--color-zinc-400);
+    --color-gray-500: var(--color-zinc-500);
+    --color-gray-600: var(--color-zinc-600);
+    --color-gray-700: var(--color-zinc-700);
+    --color-gray-800: var(--color-zinc-800);
+    --color-gray-900: var(--color-zinc-900);
+    --color-gray-950: var(--color-zinc-950);
+
+    /* Troque blue por outra cor para mudar o tema principal */
+    --color-primary-50: var(--color-blue-50);
+    --color-primary-100: var(--color-blue-100);
+    --color-primary-200: var(--color-blue-200);
+    --color-primary-300: var(--color-blue-300);
+    --color-primary-400: var(--color-blue-400);
+    --color-primary-500: var(--color-blue-500);
+    --color-primary-600: var(--color-blue-600);
+    --color-primary-700: var(--color-blue-700);
+    --color-primary-800: var(--color-blue-800);
+    --color-primary-900: var(--color-blue-900);
+    --color-primary-950: var(--color-blue-950);
+}

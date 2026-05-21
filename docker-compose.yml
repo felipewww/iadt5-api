@@ -1,0 +1,180 @@
+services:
+
+  # ── Infraestrutura ────────────────────────────────────────────────────────────
+
+  infra-iadt-postgres:
+    image: postgres:16
+    container_name: infra-iadt-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: _1_1
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d _1_1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  infra-iadt-rabbitmq:
+    image: rabbitmq:3-management
+    container_name: infra-iadt-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  infra-iadt-mongodb:
+    image: mongo:7
+    container_name: infra-iadt-mongodb
+    restart: unless-stopped
+    attach: false
+    command: ["--replSet", "rs0", "--bind_ip_all", "--quiet"]
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping').ok", "--quiet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  infra-iadt-mongodb-init:
+    image: mongo:7
+    container_name: infra-iadt-mongodb-init
+    restart: "no"
+    depends_on:
+      infra-iadt-mongodb:
+        condition: service_healthy
+    entrypoint: >
+      mongosh --host infra-iadt-mongodb:27017
+      --eval "try { rs.status() } catch(e) {
+        rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'infra-iadt-mongodb:27017' }] })
+      }"
+
+  # ── Jobs ─────────────────────────────────────────────────────────────────────
+
+  infra-iadt-jobs:
+    build:
+      context: ./jobs
+      dockerfile: Dockerfile.dev
+    container_name: infra-iadt-jobs
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./jobs:/app
+      - jobs_modules:/app/node_modules
+    env_file:
+      - ./jobs/.env
+    depends_on:
+      infra-iadt-mongodb-init:
+        condition: service_completed_successfully
+
+  # ── Aplicação ─────────────────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: fiap-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    command: sh -c "npm run db:create && npm run mgt:run && npm run start:dev"
+    environment:
+      ANALYZER_SERVICE_URL: http://fiap-analyzer:3300
+    volumes:
+      - ./api:/app
+      - api_modules:/app/node_modules
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      infra-iadt-postgres:
+        condition: service_healthy
+      infra-iadt-rabbitmq:
+        condition: service_healthy
+      infra-iadt-jobs:
+        condition: service_started
+
+  ocr:
+    build:
+      context: ./ocr
+      dockerfile: Dockerfile.dev
+    container_name: fiap-ocr
+    restart: unless-stopped
+    ports:
+      - "3201:3201"
+    volumes:
+      - ./ocr:/app
+    depends_on:
+      infra-iadt-rabbitmq:
+        condition: service_healthy
+
+  analyzer:
+    build:
+      context: ./analyzer
+      dockerfile: Dockerfile.dev
+    container_name: fiap-analyzer
+    restart: unless-stopped
+    ports:
+      - "3300:3300"
+    environment:
+      OCR_SERVICE_URL: http://ocr:3201
+      MONGO_URI: mongodb://infra-iadt-mongodb:27017/analyzer?directConnection=true
+      RMQ_USER: guest
+      RMQ_PASS: guest
+      RMQ_HOST: infra-iadt-rabbitmq:5672
+      JOBS_SERVICE_URL: http://infra-iadt-jobs:3100
+    volumes:
+      - ./analyzer:/app
+      - analyzer_modules:/app/node_modules
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      ocr:
+        condition: service_started
+      infra-iadt-rabbitmq:
+        condition: service_healthy
+      infra-iadt-mongodb-init:
+        condition: service_completed_successfully
+      infra-iadt-jobs:
+        condition: service_started
+
+  web-admin:
+    build:
+      context: ./web-admin
+      dockerfile: Dockerfile.dev
+    container_name: fiap-web-admin
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web-admin:/app
+      - web_admin_modules:/app/node_modules
+
+volumes:
+  api_modules:
+  analyzer_modules:
+  web_admin_modules:
+  jobs_modules:
+  postgres_data:
+  mongodb_data:
+  rabbitmq_data:

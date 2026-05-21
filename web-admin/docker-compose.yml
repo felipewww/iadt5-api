@@ -1,0 +1,22 @@
+services:
+  web-admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: fiap-web-admin
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    networks:
+      - platform
+
+networks:
+  platform:
+    name: platform_default
+    external: true
+
+volumes:
+  node_modules:

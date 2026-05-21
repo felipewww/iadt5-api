@@ -1,0 +1,18 @@
+services:
+  ocr:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: fiap-ocr
+    restart: unless-stopped
+    ports:
+      - "3201:3201"
+    volumes:
+      - .:/app
+    networks:
+      - platform
+
+networks:
+  platform:
+    name: platform_default
+    external: true
