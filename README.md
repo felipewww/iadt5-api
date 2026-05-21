@@ -92,6 +92,8 @@ O design do pipeline segue três princípios:
    e exibe o resultado assim que o job finaliza
 ```
 
+> **Por que o S3?** Os serviços se comunicam via RabbitMQ, que não foi projetado para trafegar binários grandes. A `api` faz o único upload do arquivo para o S3 e passa apenas a presigned URL na mensagem — OCR e Analyzer baixam o arquivo diretamente do S3, mantendo as mensagens leves e os serviços desacoplados. Detalhes em [`DOCUMENTATION.md`](./DOCUMENTATION.md#por-que-o-s3-é-usado-como-bus-de-arquivos-entre-serviços).
+
 ---
 
 ## Pré-requisitos
