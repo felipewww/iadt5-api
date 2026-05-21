@@ -423,6 +423,58 @@ A primeira passagem usa **somente o texto OCR** (mais barato). A chamada multimo
 
 ---
 
+## Segurança
+
+### Autenticação e autorização
+
+- **JWT (JSON Web Token)** — access token com expiração de 15 minutos; refresh token de 7 dias. Implementado em `api/src/application/auth/`.
+- **RBAC por grupo** — permissões são definidas em `permissions.config.ts` como código, não como dados. Cada endpoint protegido declara `@Roles(SysModules.X, [PermissionsContracts.Y])`. Grupos recebem permissões explícitas; sem permissão, a request é rejeitada com `403 Forbidden`.
+- **HashId (ofuscação de IDs)** — todos os IDs numéricos são convertidos para tokens HMAC-SHA256 na borda da API, prevenindo enumeração de recursos (IDOR). IDs internos nunca são expostos ao frontend.
+
+### Validação e tratamento de entradas não confiáveis
+
+A validação segue o princípio de **fail fast na borda mais próxima da origem**:
+
+1. **Upload de arquivo** — tipo MIME validado contra whitelist (PDF, PNG, JPEG, GIF, WEBP) e tamanho limitado a 5 MB no handler `UploadProjectAnalysisHandler`, antes de qualquer I/O (S3, RabbitMQ, banco). Rejeita com `400 Bad Request`.
+2. **Body e query string** — `ValidationPipe` global com `class-validator` valida todos os DTOs. Campos desconhecidos são descartados (`whitelist: true`).
+3. **Saída do LLM** — `withStructuredOutput(AnalysisOutputSchema)` força o modelo a retornar JSON válido conforme o schema Zod. Se o schema não for satisfeito, a chamada lança exceção antes de propagar dados inválidos. Ver seção [Guardrails implementados](#guardrails-implementados).
+
+### Uso controlado de modelos de IA
+
+- **Escopo restrito** — o LLM é invocado exclusivamente para duas tarefas bem definidas: extração de componentes/relacionamentos e avaliação de qualidade. O prompt de sistema delimita explicitamente o domínio (arquitetura de software).
+- **Saída estruturada e previsível** — o modelo nunca retorna texto livre: `withStructuredOutput` força JSON com tipos conhecidos. Campos array têm default `[]`; nunca `null`.
+- **Limite de iterações** — `MAX_ITERATIONS = 3` no grafo impede que o LLM gere perguntas indefinidamente. Após o limite, o grafo prossegue para avaliação com o que foi extraído.
+- **Separação de responsabilidades** — extração e avaliação são nós separados no grafo. O nó de avaliação recebe o JSON estruturado como entrada, não o arquivo original, reduzindo o espaço para alucinações narrativas.
+
+### Tratamento seguro de falhas da IA
+
+- Qualquer exceção no grafo LangGraph é capturada no `AnalysisRequestConsumer`: um step `analyzer-error` é adicionado ao job com a mensagem descritiva, e o status é marcado como `FAILED`.
+- O frontend lê o step `analyzer-error` via SSE e exibe a mensagem ao usuário com opção de reenviar o arquivo.
+- Mensagens RabbitMQ rejeitadas são reenfileiradas automaticamente pelo broker se ainda não foram reentregues (`!redelivered`), evitando perda silenciosa de trabalho.
+- Arquivos sem componentes identificáveis falham com erro orientativo antes de gerar perguntas ao usuário ou consumir tokens de avaliação.
+
+### Comunicação segura entre serviços
+
+| Canal | Mecanismo | Observação |
+|---|---|---|
+| Frontend → Jobs (stream SSE) | JWT assinado com `COGNITE_JOBS_SECRET` | Expira em 2h; gerado pela API após criar o job |
+| API → Notifications | JWT assinado com `NOTIFICATIONS_SECRET` | Token de canal por usuário, expira em 1h |
+| Serviços → RabbitMQ | Autenticação por usuário/senha | `guest/guest` em dev — **trocar em produção** |
+| Serviços → S3 | AWS Access Key + Secret via variáveis de ambiente | Credenciais não commitadas (`.env` no `.gitignore`) |
+| Inter-serviços (HTTP) | Rede Docker interna | Serviços não são expostos fora do compose |
+
+### Riscos e limitações de segurança identificados
+
+| Risco | Impacto | Mitigação atual |
+|---|---|---|
+| Credenciais padrão em dev (`guest/guest`, `change-me-in-production`) | Alto em produção | Documentadas; devem ser substituídas no deploy |
+| Alucinação sutil do LLM (relacionamentos inferidos) | Médio | `consistency_issues` captura referências inválidas; alucinações semanticamente coerentes não são detectadas |
+| Score não-determinístico | Baixo | Documentado como orientação, não métrica absoluta |
+| Ausência de rate limiting no upload | Médio | Não implementado; recomendado em produção |
+| Rastreabilidade limitada das chamadas ao LLM | Baixo | Rastreável por `jobId`; sem audit log dedicado |
+
+---
+
 ## Guardrails implementados
 
 Guardrails são mecanismos de controle que limitam entradas inválidas, forçam saídas estruturadas e evitam que o modelo produza resultados inutilizáveis ou entre em loops.

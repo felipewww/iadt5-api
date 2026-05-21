@@ -199,14 +199,47 @@ Na primeira execução as migrations criam um usuário administrador:
 
 ---
 
-## 🛡️ Guardrails de IA
+## 🔒 Segurança
 
-| Tipo | Mecanismo | Onde |
+### Autenticação e autorização
+
+- **JWT** — access token de 15 min + refresh de 7 dias
+- **RBAC por grupo** — cada endpoint declara o módulo e a operação exigidos; sem permissão explícita, a request é rejeitada com `403`
+- **HashId (HMAC-SHA256)** — IDs numéricos nunca são expostos ao frontend, prevenindo enumeração de recursos (IDOR)
+
+### Validação de entradas não confiáveis
+
+| Camada | O que é validado | Comportamento |
 |---|---|---|
-| Entrada | Whitelist MIME type (PDF, PNG, JPEG, GIF, WEBP) | `api/` |
-| Entrada | Limite de tamanho (5 MB) | `api/` |
-| Saída | Structured Output via Zod (`withStructuredOutput`) | `analyzer/` |
-| Saída | Score limitado 0–10 pelo schema | `analyzer/` |
-| Alucinação | Bloqueio quando nenhum componente é identificado | `analyzer/` |
-| Alucinação | Human-in-the-loop com limite de 3 iterações | `analyzer/` |
-| Consistência | Validação de referências em relacionamentos | `analyzer/` |
+| API — upload | MIME type (whitelist) + tamanho ≤ 5 MB | `400 Bad Request` antes de qualquer I/O |
+| API — body/query | Formato via `class-validator` + `ValidationPipe` global | `400` com lista de erros |
+| Analyzer — saída do LLM | Schema Zod via `withStructuredOutput` | Exceção se o modelo retornar JSON fora do schema |
+
+### Uso controlado da IA
+
+O LLM é invocado com prompt de sistema fixo, escopo restrito à análise de arquitetura e resposta forçada a um schema Zod conhecido — o modelo nunca retorna texto livre nem executa ações fora do grafo. O limite de 3 iterações previne loops de perguntas indefinidos. Extração e avaliação são nós separados no grafo, reduzindo o espaço para alucinações narrativas.
+
+### Tratamento de falhas da IA
+
+Qualquer exceção no grafo LangGraph é capturada no consumer RabbitMQ: um step `analyzer-error` é registrado com a mensagem descritiva, o job é marcado como `FAILED` e o frontend exibe a mensagem com opção de reenvio. Mensagens RabbitMQ rejeitadas são reenfileiradas automaticamente se ainda não foram reentregues.
+
+### Comunicação entre serviços
+
+| Canal | Mecanismo |
+|---|---|
+| Frontend → Jobs (stream SSE) | JWT assinado com `COGNITE_JOBS_SECRET` (expira em 2h) |
+| API → Notifications | JWT assinado com `NOTIFICATIONS_SECRET` (expira em 1h) |
+| Serviços → RabbitMQ | Autenticação por usuário/senha |
+| Serviços → S3 | AWS credentials via variáveis de ambiente (não commitadas) |
+| Inter-serviços (HTTP) | Rede Docker interna — serviços não expostos fora do compose |
+
+### Riscos e limitações identificados
+
+| Risco | Mitigação atual |
+|---|---|
+| Credenciais padrão (`guest/guest`, `change-me-in-production`) | Adequadas só em dev — **trocar em produção** |
+| Alucinação sutil do LLM (relacionamentos inferidos) | `consistency_issues` captura referências inválidas; alucinações semanticamente coerentes não são detectadas |
+| Score não-determinístico | Documentado como orientação, não métrica absoluta |
+| Ausência de rate limiting no upload | Recomendado adicionar em produção |
+
+> Para detalhes de implementação de cada controle, consulte a seção **Segurança** em [`DOCUMENTATION.md`](./DOCUMENTATION.md).

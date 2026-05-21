@@ -47,7 +47,7 @@ src/
     │   └── ocr.service.ts              # OcrService — HTTP client para o serviço ocr/
     └── graph/
         ├── analysis.state.ts           # AnalysisAnnotation (LangGraph state)
-        └── analysis.graph.ts           # AnalysisGraphService — grafo compilado com MemorySaver
+        └── analysis.graph.ts           # AnalysisGraphService — grafo compilado com MongoDBSaver
 ```
 
 **Regras de dependência** (igual ao `api/`):
@@ -66,24 +66,31 @@ Imports sempre via alias `@/` (mapeia para `src/`).
 START
   │
   ▼
-analyzeDocument          ← LLM multimodal (PDF + OCR text) → ArchitectureJson ou questions[]
+extractArchitecture
+  ├── 1ª tentativa: só texto OCR (mais barato)
+  ├── Se components = 0 e arquivo visual (PDF/imagem):
+  │       escala para chamada multimodal (arquivo + texto)
+  ├── Se ainda components = 0: throw (fail fast, não gera perguntas)
   │
-  ├── pendingQuestions.length > 0 ──► waitForHuman   ← interrupt(questions)
-  │                                        │
-  │                                   POST /analysis/:id/reply
-  │                                        │
-  │                                   Command({ resume: answer })
-  │                                        │
-  │                                   ◄────┘ (loop)
+  ├── pendingQuestions.length > 0 && iterationCount < MAX_ITERATIONS (3)
+  │       ▼
+  │   waitForHuman         ← interrupt(questions)
+  │       │                  POST /analysis/:id/reply
+  │       │                  Command({ resume: answer })
+  │       │                  iterationCount + 1
+  │       └──────────────► extractArchitecture  (loop, máx 3x)
   │
-  └── sem dúvidas ──► evaluateArchitecture  ← LLM avalia JSON → score + relatório
-                              │
-                             END
+  └── sem dúvidas (ou limite atingido)
+          ▼
+      evaluateArchitecture  ← LLM avalia ArchitectureJson → score + relatório
+          │
+         END
 ```
 
-- **`MemorySaver`** persiste o estado entre chamadas HTTP por `thread_id` (= `sessionId`)
-- **`interrupt()`** pausa o grafo; retomado via `graph.invoke(new Command({ resume }))`
-- **`getState(sessionId)`** lê o snapshot atual sem avançar o grafo
+- **`MongoDBSaver`** persiste o estado entre chamadas HTTP por `thread_id` (= `jobId`); sessões sobrevivem a reinicializações do container
+- **`interrupt()`** pausa o grafo de forma determinística; retomado via `graph.invoke(new Command({ resume }))`
+- **`getState(jobId)`** lê o snapshot atual sem avançar o grafo
+- **`MAX_ITERATIONS = 3`** — após 3 ciclos pergunta/resposta, o grafo força continuação para `evaluateArchitecture`
 
 ### Status derivado do estado
 
@@ -129,11 +136,16 @@ Response sempre envolto em `{ data: ... }` pelo `GlobalInterceptor`.
 
 | Variável | Padrão | Descrição |
 |---|---|---|
-| `APP_PORT` | 3300 | Porta HTTP |
+| `APP_PORT` | `3300` | Porta HTTP |
 | `OCR_SERVICE_URL` | `http://localhost:3201` | URL do serviço OCR |
+| `MONGO_URI` | — | URI de conexão com MongoDB (inclui auth e `directConnection=true`) |
+| `RMQ_USER` | `guest` | Usuário RabbitMQ |
+| `RMQ_PASS` | `guest` | Senha RabbitMQ |
+| `RMQ_HOST` | `infra-iadt-rabbitmq:5672` | Host:porta do RabbitMQ |
+| `JOBS_SERVICE_URL` | `http://infra-iadt-jobs:3100` | URL do serviço de jobs |
 | `LLM_PROVIDER` | `anthropic` | `anthropic` ou `openai` |
 | `LLM_MODEL` | `claude-opus-4-5` | Modelo a usar |
-| `ANTHROPIC_API_KEY` | — | Obrigatório se provider = anthropic |
+| `ANTHROPIC_API_KEY` | — | **Obrigatório** se provider = anthropic |
 | `OPENAI_API_KEY` | — | Obrigatório se provider = openai |
 
 ---
@@ -152,5 +164,5 @@ npm run lint        # ESLint + autofix
 
 - Build Docker funcional ✅
 - Dependências instaladas (`npm install`) ✅
-- `.env` criado a partir do `.env.example` — **falta preencher as API keys**
-- `MemorySaver` é in-memory: reiniciar o container apaga todas as sessões ativas
+- `.env` criado a partir do `.env.example` — **falta preencher `ANTHROPIC_API_KEY` (ou `OPENAI_API_KEY`)**
+- Estado do grafo persistido no MongoDB via `MongoDBSaver` — sessões sobrevivem a reinicializações do container
